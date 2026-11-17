@@ -1,0 +1,31 @@
+[package]
+name = "markdown-tabs"
+version = "0.5.0"
+edition = "2021"
+description = "Markdown Tabs - trinh xem & soan thao Markdown da tab (ban Rust native)"
+license = "MIT"
+
+[[bin]]
+name = "MarkdownTabs"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+pulldown-cmark = "0.12"
+rfd = "0.15"
+encoding_rs = "0.8"
+unicode-normalization = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arboard = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

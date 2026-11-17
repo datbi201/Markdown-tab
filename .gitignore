@@ -1,0 +1,17 @@
+# Rust
+target/
+**/target/
+
+# Tệp nhị phân và gói phát hành (để ở ..\02_LOCAL_RUNTIME và ..\03_ONEDRIVE_BACKUP)
+*.exe
+*.dll
+*.zip
+*.tar.gz
+
+# Log và tệp tạm
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini
+desktop.ini
