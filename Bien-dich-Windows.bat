@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-echo === Bien dich Markdown Tabs v0.5.0 tren Windows ===
+echo === Bien dich Markdown Tabs v0.6.0 tren Windows ===
 where cargo >nul 2>nul
 if errorlevel 1 (
   echo Chua co Rust. Dang tai trinh cai rustup...

@@ -9,7 +9,9 @@
 //!  * cong thuc LaTeX -> OMML (Equation cua Word, sua duoc)
 
 use crate::math;
-use crate::{Block, Span};
+use crate::media;
+use crate::{Align, Block, Span};
+use std::collections::HashMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -65,7 +67,14 @@ struct Ctx {
     next_rel: usize,
     next_docpr: usize,
     doc_dir: PathBuf,
+    /// anh http(s) da tai san (url -> byte)
+    remote: HashMap<String, Vec<u8>>,
+    /// be rong toi da cua anh hien tai (EMU): 16.5 cm trong van ban, hep hon trong o bang
+    max_img_emu: f64,
 }
+
+const PAGE_IMG_EMU: f64 = 5_940_000.0;
+const MAX_IMG_H_EMU: f64 = 8_000_000.0; // ~22 cm
 
 impl Ctx {
     fn add_rel(&mut self, ty: &'static str, target: &str) -> String {
@@ -126,29 +135,18 @@ fn text_runs(text: &str, rpr: &str) -> String {
 
 fn image_run(alt: &str, dest: &str, ctx: &mut Ctx) -> String {
     let note = |s: String| text_runs(&s, &run_props(false, true, false, false, Some("7F7F7F"), false));
-    if dest.starts_with("http://") || dest.starts_with("https://") || dest.starts_with("data:") {
-        return note(format!("[Ảnh: {alt} - {dest}]"));
-    }
-    let p = PathBuf::from(dest.split('#').next().unwrap_or(dest));
-    let full = if p.is_absolute() { p } else { ctx.doc_dir.join(&p) };
-    let ext = full.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
-        return note(format!("[Ảnh: {alt}]"));
-    }
-    let (Ok(bytes), Ok((w, h))) = (std::fs::read(&full), image::image_dimensions(&full)) else {
-        return note(format!("[Ảnh: {alt}]"));
+    // PNG / JPEG / GIF giu nguyen; WebP, BMP... doi sang PNG; nguon: tep cuc bo, data:, http(s) da tai
+    let Some(img) = media::load_for_export(dest, &ctx.doc_dir, &ctx.remote) else {
+        let shown = if dest.starts_with("data:") { "data:…" } else { dest };
+        return note(format!("[Ảnh không nhúng được: {alt} - {shown}]"));
     };
-    if w == 0 || h == 0 {
-        return note(format!("[Ảnh: {alt}]"));
-    }
-    let media_name = format!("image{}.{}", ctx.media.len() + 1, if ext == "jpeg" { "jpg" } else { &ext });
-    ctx.media.push((media_name.clone(), bytes));
+    let (w, h) = (img.w, img.h);
+    let media_name = format!("image{}.{}", ctx.media.len() + 1, img.ext);
+    ctx.media.push((media_name.clone(), img.bytes));
     let rid = ctx.add_rel(REL_IMAGE, &format!("media/{media_name}"));
-    // rong toi da 16.5cm ~ 5940000 EMU
-    let max_cx = 5_940_000.0f64;
     let (wf, hf) = (w as f64 * 9525.0, h as f64 * 9525.0);
-    let scale = (max_cx / wf).min(1.0);
-    let (cx, cy) = ((wf * scale) as i64, (hf * scale) as i64);
+    let scale = (ctx.max_img_emu / wf).min(MAX_IMG_H_EMU / hf).min(1.0);
+    let (cx, cy) = (((wf * scale) as i64).max(1), ((hf * scale) as i64).max(1));
     ctx.next_docpr += 1;
     let did = ctx.next_docpr;
     let name = xml_escape(&media_name);
@@ -192,6 +190,15 @@ fn display_only(spans: &[Span]) -> Option<&Span> {
     }
 }
 
+/// Doan (hoac o bang) chi co dung mot cong thuc (bo qua khoang trang): Word se tu can giua neu de tran.
+fn sole_math(spans: &[Span]) -> Option<&Span> {
+    let mut it = spans.iter().filter(|s| !(s.math.is_none() && s.image.is_none() && s.text.trim().is_empty()));
+    match (it.next(), it.next()) {
+        (Some(m), None) if m.math.is_some() => Some(m),
+        _ => None,
+    }
+}
+
 fn para(spans: &[Span], ctx: &mut Ctx, ppr: &str) -> String {
     if let Some(m) = display_only(spans) {
         return format!(
@@ -200,7 +207,62 @@ fn para(spans: &[Span], ctx: &mut Ctx, ppr: &str) -> String {
         );
     }
     let ppr = if ppr.is_empty() { String::new() } else { format!("<w:pPr>{ppr}</w:pPr>") };
+    if let Some(m) = sole_math(spans) {
+        // cong thuc trong dong nhung nam mot minh -> giu can le trai, khong tu nhay ra giua
+        return format!("<w:p>{ppr}{}</w:p>", math::to_omml_aligned(m.text.trim(), "left"));
+    }
     format!("<w:p>{ppr}{}</w:p>", spans_xml(spans, ctx, false))
+}
+
+/// Do dai hien thi uoc tinh cua mot o (de chia be rong cot theo noi dung).
+fn cell_len(sp: &[Span]) -> usize {
+    let mut n = 0;
+    for s in sp {
+        n += if s.image.is_some() { 24 } else { s.text.split('\n').map(|l| l.chars().count()).max().unwrap_or(0) };
+    }
+    n
+}
+
+/// Chia `total` twips cho cac cot theo do dai noi dung (4..=44 ky tu), moi cot khong be hon ~1.2 cm.
+fn col_widths(head: &[Vec<Span>], rows: &[Vec<Vec<Span>>], cols: usize, total: i64) -> Vec<i64> {
+    let weights: Vec<f64> = (0..cols)
+        .map(|c| {
+            let mut m = head.get(c).map_or(0, |s| cell_len(s));
+            for r in rows {
+                m = m.max(r.get(c).map_or(0, |s| cell_len(s)));
+            }
+            m.clamp(9, 40) as f64
+        })
+        .collect();
+    let total_f = total as f64;
+    let min_w = (700.0f64).min(total_f / cols as f64);
+    let mut fixed = vec![false; cols];
+    let mut w = vec![0.0f64; cols];
+    for _ in 0..=cols {
+        let free_weight: f64 = (0..cols).filter(|&i| !fixed[i]).map(|i| weights[i]).sum();
+        let free_total = total_f - (0..cols).filter(|&i| fixed[i]).map(|i| w[i]).sum::<f64>();
+        let mut changed = false;
+        for i in 0..cols {
+            if fixed[i] {
+                continue;
+            }
+            w[i] = free_total * weights[i] / free_weight.max(1.0);
+            if w[i] < min_w {
+                w[i] = min_w;
+                fixed[i] = true;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    let mut out: Vec<i64> = w.iter().map(|x| x.round() as i64).collect();
+    let diff = total - out.iter().sum::<i64>();
+    if let Some(m) = out.iter_mut().max() {
+        *m += diff;
+    }
+    out
 }
 
 fn blocks_xml(blocks: &[Block], ctx: &mut Ctx, out: &mut String, level: usize, in_cell: bool) {
@@ -273,39 +335,54 @@ fn blocks_xml(blocks: &[Block], ctx: &mut Ctx, out: &mut String, level: usize, i
                     }
                 }
             }
-            Block::Table { head, rows } => {
+            Block::Table { head, rows, aligns } => {
                 let cols = head.len().max(rows.iter().map(|r| r.len()).max().unwrap_or(0)).max(1);
-                let wcol = 9638 / cols;
+                // trong o danh sach/trich dan khong co indent rieng cho bang, nen dung toan bo be rong trang (9638 twips)
+                let widths = col_widths(head, rows, cols, 9638);
                 let bd = |n: &str| format!("<w:{n} w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>");
                 let mut tbl = format!(
-                    "<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/><w:tblBorders>{}{}{}{}{}{}</w:tblBorders><w:tblLayout w:type=\"fixed\"/><w:tblCellMar><w:left w:w=\"100\" w:type=\"dxa\"/><w:right w:w=\"100\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr>",
-                    bd("top"), bd("left"), bd("bottom"), bd("right"), bd("insideH"), bd("insideV")
+                    "<w:tbl><w:tblPr><w:tblW w:w=\"{}\" w:type=\"dxa\"/><w:tblBorders>{}{}{}{}{}{}</w:tblBorders><w:tblLayout w:type=\"fixed\"/><w:tblCellMar><w:left w:w=\"100\" w:type=\"dxa\"/><w:right w:w=\"100\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr>",
+                    widths.iter().sum::<i64>(), bd("top"), bd("left"), bd("bottom"), bd("right"), bd("insideH"), bd("insideV")
                 );
                 tbl.push_str("<w:tblGrid>");
-                for _ in 0..cols {
-                    tbl.push_str(&format!("<w:gridCol w:w=\"{wcol}\"/>"));
+                for w in &widths {
+                    tbl.push_str(&format!("<w:gridCol w:w=\"{w}\"/>"));
                 }
                 tbl.push_str("</w:tblGrid>");
+                let jc = |c: usize| match aligns.get(c) {
+                    Some(Align::Center) => "<w:jc w:val=\"center\"/>",
+                    Some(Align::Right) => "<w:jc w:val=\"right\"/>",
+                    _ => "",
+                };
                 let mut emit_row = |cells: &Vec<Vec<Span>>, header: bool, ctx: &mut Ctx, tbl: &mut String| {
-                    tbl.push_str("<w:tr>");
+                    tbl.push_str("<w:tr><w:trPr><w:cantSplit/>");
                     if header {
-                        tbl.push_str("<w:trPr><w:tblHeader/></w:trPr>");
+                        tbl.push_str("<w:tblHeader/>");
                     }
+                    tbl.push_str("</w:trPr>");
                     for c in 0..cols {
                         let cell = cells.get(c);
+                        let wcol = widths[c];
+                        // anh trong o khong duoc rong hon cot (tru le trai/phai 100 twips moi ben)
+                        ctx.max_img_emu = (((wcol - 200).max(400)) as f64 * 635.0).min(PAGE_IMG_EMU);
                         let shd = if header { "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"D9E2F3\"/>" } else { "" };
                         let inner = match cell {
-                            Some(sp) => {
-                                if let Some(m) = display_only(sp) {
-                                    format!("<w:p>{}</w:p>", math::to_omml(m.text.trim(), false))
-                                } else {
-                                    format!("<w:p><w:pPr><w:spacing w:before=\"20\" w:after=\"20\"/></w:pPr>{}</w:p>", spans_xml(sp, ctx, header))
-                                }
+                            Some(sp) if sole_math(sp).is_some() => {
+                                let m = sole_math(sp).unwrap();
+                                let j = match aligns.get(c) {
+                                    Some(Align::Center) => "center",
+                                    Some(Align::Right) => "right",
+                                    _ => "left",
+                                };
+                                format!("<w:p><w:pPr><w:spacing w:before=\"20\" w:after=\"20\"/></w:pPr>{}</w:p>", math::to_omml_aligned(m.text.trim(), j))
                             }
+                            Some(sp) => format!("<w:p><w:pPr><w:spacing w:before=\"20\" w:after=\"20\"/>{}</w:pPr>{}</w:p>", jc(c), spans_xml(sp, ctx, header)),
                             None => "<w:p/>".to_string(),
                         };
-                        tbl.push_str(&format!("<w:tc><w:tcPr><w:tcW w:w=\"{wcol}\" w:type=\"dxa\"/>{shd}</w:tcPr>{inner}</w:tc>"));
+                        // schema tcPr: tcW, ..., shd, ..., vAlign
+                        tbl.push_str(&format!("<w:tc><w:tcPr><w:tcW w:w=\"{wcol}\" w:type=\"dxa\"/>{shd}<w:vAlign w:val=\"center\"/></w:tcPr>{inner}</w:tc>"));
                     }
+                    ctx.max_img_emu = PAGE_IMG_EMU;
                     tbl.push_str("</w:tr>");
                 };
                 if !head.is_empty() {
@@ -322,7 +399,11 @@ fn blocks_xml(blocks: &[Block], ctx: &mut Ctx, out: &mut String, level: usize, i
                 out.push_str("<w:p><w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"6\" w:space=\"1\" w:color=\"BFBFBF\"/></w:pBdr></w:pPr></w:p>");
             }
             Block::Html(text) => {
-                out.push_str(&para(&[Span::plain(text.trim().to_string())], ctx, "<w:spacing w:after=\"120\"/>"));
+                // <img> -> anh that, <br> -> xuong dong, cac the khac bo di (chi giu chu)
+                let spans = media::html_to_spans(text);
+                if !spans.is_empty() {
+                    out.push_str(&para(&spans, ctx, "<w:spacing w:after=\"120\"/>"));
+                }
             }
         }
     }
@@ -406,7 +487,11 @@ fn iso_now() -> String {
 
 /// Dong goi DOCX tu AST. `title` dua vao docProps.
 pub fn build(blocks: &[Block], doc_dir: &Path, title: &str, version: &str) -> Option<Vec<u8>> {
-    let mut ctx = Ctx { rels: Vec::new(), media: Vec::new(), nums: Vec::new(), next_rel: 0, next_docpr: 0, doc_dir: doc_dir.to_path_buf() };
+    // anh http(s): tai truoc (song song, toi da 12 giay moi anh) de nhung that vao Word
+    let mut urls = Vec::new();
+    media::collect_remote_images(blocks, &mut urls);
+    let remote = if urls.is_empty() { HashMap::new() } else { media::fetch_many(&urls) };
+    let mut ctx = Ctx { rels: Vec::new(), media: Vec::new(), nums: Vec::new(), next_rel: 0, next_docpr: 0, doc_dir: doc_dir.to_path_buf(), remote, max_img_emu: PAGE_IMG_EMU };
     let mut body = String::new();
     blocks_xml(blocks, &mut ctx, &mut body, 0, false);
     if body.is_empty() {
@@ -483,8 +568,9 @@ mod tests {
     fn build_sample_to_tmp() {
         let md = std::fs::read_to_string(std::env::var("MDT_SAMPLE").unwrap_or_else(|_| "../Test-Rust_v0.4.md".into())).unwrap_or_else(|_| "# T\n\n- a\n  - b\n\n$$x^2$$".into());
         let blocks = crate::parse_markdown(&md);
-        let bytes = build(&blocks, Path::new("."), "Test", "0.5.0").unwrap();
-        let out = std::env::var("MDT_OUT").unwrap_or_else(|_| "/tmp/mdt-test.docx".into());
+        let dir = std::env::var("MDT_SAMPLE").ok().and_then(|p| Path::new(&p).parent().map(|d| d.to_path_buf())).unwrap_or_else(|| PathBuf::from("."));
+        let bytes = build(&blocks, &dir, "Test", "0.5.0").unwrap();
+        let out = std::env::var("MDT_OUT").unwrap_or_else(|_| std::env::temp_dir().join("mdt-test-sample.docx").to_string_lossy().into_owned());
         std::fs::write(out, bytes).unwrap();
     }
 }

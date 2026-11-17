@@ -1398,7 +1398,63 @@ fn m_e(inner: &str) -> String {
     format!("<m:e>{inner}</m:e>")
 }
 
+/// Cac o cua mot hang `aligned`: moi dau `&` la mot diem can (m:aln) tren run dau cua o ke tiep.
+fn omml_cells_aligned(cells: &[Node], st: Sty) -> String {
+    let mut out = String::new();
+    for (k, c) in cells.iter().enumerate() {
+        let x = omml_node(c, st);
+        if k == 0 {
+            out.push_str(&x);
+            continue;
+        }
+        // diem can nam o dau run dau tien cua o ke tiep (m:rPr/m:aln, dat cuoi m:rPr theo schema)
+        if let Some(rest) = x.strip_prefix("<m:r><m:rPr>") {
+            out.push_str("<m:r><m:rPr>");
+            match rest.find("</m:rPr>") {
+                Some(p) => {
+                    out.push_str(&rest[..p]);
+                    out.push_str("<m:aln/></m:rPr>");
+                    out.push_str(&rest[p + "</m:rPr>".len()..]);
+                }
+                None => out.push_str(rest),
+            }
+        } else if let Some(rest) = x.strip_prefix("<m:r>") {
+            out.push_str("<m:r><m:rPr><m:aln/></m:rPr>");
+            out.push_str(rest);
+        } else {
+            // o bat dau bang phan so / can...: chen mot run rong lam diem can
+            out.push_str("<m:r><m:rPr><m:aln/></m:rPr><w:rPr><w:rFonts w:ascii=\"Cambria Math\" w:hAnsi=\"Cambria Math\"/></w:rPr><m:t></m:t></m:r>");
+            out.push_str(&x);
+        }
+    }
+    out
+}
+
+/// Mang phuong trinh (nhieu dong xep thang hang): <m:eqArr> voi moi dong la mot <m:e>.
+fn eq_array(lines: Vec<String>) -> String {
+    let mut s = String::from("<m:eqArr><m:eqArrPr/>");
+    for l in &lines {
+        s.push_str(&m_e(l));
+    }
+    s.push_str("</m:eqArr>");
+    s
+}
+
 fn omml_nodes(items: &[Node], st: Sty) -> String {
+    // co `\\` o cap tren cung (khong trong moi truong) -> xep thanh nhieu dong
+    if items.iter().any(|n| matches!(n, Node::Newline)) {
+        let mut lines: Vec<String> = Vec::new();
+        let mut cur: Vec<Node> = Vec::new();
+        for n in items {
+            if matches!(n, Node::Newline) {
+                lines.push(omml_nodes(&std::mem::take(&mut cur), st));
+            } else {
+                cur.push(n.clone());
+            }
+        }
+        lines.push(omml_nodes(&cur, st));
+        return eq_array(lines);
+    }
     let mut out = String::new();
     let mut i = 0;
     while i < items.len() {
@@ -1504,16 +1560,26 @@ fn omml_node(n: &Node, st: Sty) -> String {
             m_e(&omml_node(inner, st))
         ),
         Node::Matrix { rows, open, close, align } => {
+            // aligned / align / split: he thuc xep dong, can theo dau & -> m:eqArr (Word hieu la "Equation Array")
+            if open.is_empty() && close.is_empty() && align.first() == Some(&'r') {
+                return eq_array(rows.iter().map(|r| omml_cells_aligned(r, st)).collect());
+            }
             let jc = match align.first() {
                 Some('l') => "left",
                 Some('r') => "right",
                 _ => "center",
             };
-            let mut s = format!("<m:m><m:mPr><m:mcs><m:mc><m:mcPr><m:mcJc m:val=\"{jc}\"/></m:mcPr></m:mc></m:mcs></m:mPr>");
+            // so cot: Word can m:count dung bang so o cua hang dai nhat, neu khong se xep sai
+            let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(1).max(1);
+            let mut s = format!("<m:m><m:mPr><m:mcs><m:mc><m:mcPr><m:count m:val=\"{ncols}\"/><m:mcJc m:val=\"{jc}\"/></m:mcPr></m:mc></m:mcs></m:mPr>");
             for r in rows {
                 s.push_str("<m:mr>");
                 for c in r {
                     s.push_str(&m_e(&omml_node(c, st)));
+                }
+                // hang thieu o -> bu o trong de moi m:mr du so cot
+                for _ in r.len()..ncols {
+                    s.push_str("<m:e/>");
                 }
                 s.push_str("</m:mr>");
             }
@@ -1570,6 +1636,14 @@ pub fn to_omml(src: &str, display: bool) -> String {
     } else {
         format!("<m:oMath>{inner}</m:oMath>")
     }
+}
+
+/// Cong thuc la noi dung duy nhat cua doan: Word tu can giua neu chi co `<m:oMath>` tran,
+/// nen boc trong `<m:oMathPara>` voi can le chi dinh (left | center | right).
+pub fn to_omml_aligned(src: &str, jc: &str) -> String {
+    let p = parse(src);
+    let inner = omml_node(&p.root, Sty::default());
+    format!("<m:oMathPara><m:oMathParaPr><m:jc m:val=\"{jc}\"/></m:oMathParaPr><m:oMath>{inner}</m:oMath></m:oMathPara>")
 }
 
 // =============================================================== MathML (HTML)
@@ -1676,6 +1750,19 @@ mod tests {
     fn single_digit_arg() {
         let m = to_mathml(r"\frac13", false);
         assert!(m.contains("<mn>1</mn><mn>3</mn></mfrac>"), "{m}");
+    }
+
+    #[test]
+    fn omml_matrix_and_aligned_structure() {
+        let m = to_omml(r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}", true);
+        println!("MATRIX: {m}");
+        assert_eq!(m.matches("<m:mr>").count(), 2, "{m}");
+        assert!(m.contains("<m:count m:val=\"2\"/>"), "{m}");
+        let c = to_omml(r"\begin{cases} x^2 & x\ge 0 \\ -x & x<0 \end{cases}", true);
+        assert_eq!(c.matches("<m:mr>").count(), 2, "{c}");
+        let a = to_omml(r"\begin{aligned} a &= b \\ c &= d \end{aligned}", true);
+        println!("ALIGNED: {a}");
+        assert!(a.contains("<m:eqArr>") && a.matches("<m:aln/>").count() == 2, "{a}");
     }
 
     #[test]

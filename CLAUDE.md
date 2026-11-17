@@ -14,7 +14,8 @@ Trình xem và soạn thảo Markdown nhiều tab, viết bằng Rust (eframe/eg
 - Số phiên bản nằm ở `src-rust/Cargo.toml` và hằng `VERSION` trong `src-rust/src/main.rs`; đổi cả hai cùng lúc.
 
 ## 4. Build và kiểm thử
-- Máy này không có Rust. Biên dịch Windows bằng GitHub Actions (`.github/workflows/build.yml`) hoặc `Bien-dich-Windows.bat` trên máy có Rust.
+- Máy này đã có Rust (cài 2026-11-17). Ổ C: gần đầy nên build với `CARGO_TARGET_DIR=D:\mdtabs-target` (chi tiết trong `BAN-GIAO.md`). Máy khác: GitHub Actions (`.github/workflows/build.yml`) hoặc `Bien-dich-Windows.bat`.
+- Xuất file phải kiểm bằng tệp `mau-thu/Test-Xuat-file_v0.6.md`: mở DOCX trong Word thật (COM) và HTML trong Edge, đối chiếu hình, bảng, công thức trước khi báo xong.
 - Kiểm thử: `cargo test --release` trong `src-rust/` (22 bài). Bản nào chưa chạy trên Windows thật phải ghi rõ "Chưa thử trên Windows thật".
 - Mỗi lỗi sửa kèm một kiểm thử tái hiện khi làm được.
 

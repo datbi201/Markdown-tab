@@ -22,6 +22,9 @@ use std::time::{Duration, Instant, SystemTime};
 mod docx;
 mod features;
 mod fixer;
+mod icons;
+mod icons_data;
+mod media;
 mod vn_tables;
 mod math;
 
@@ -32,7 +35,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 // ------------------------------------------------------------------ consts
 const APP_TITLE: &str = "Markdown Tabs";
-const VERSION: &str = "0.5.0-rust";
+const VERSION: &str = "0.6.0-rust";
 const IPC_PORT: u16 = 47655;
 const IPC_MAGIC: &str = "MDTABS/1";
 const MD_EXTS: &[&str] = &["md", "markdown", "mdown", "mkd", "txt"];
@@ -202,9 +205,27 @@ enum Block {
     Code(String, String),         // ngon ngu, noi dung
     List { ordered: bool, items: Vec<Vec<Block>> },
     Quote(Vec<Block>),
-    Table { head: Vec<Vec<Span>>, rows: Vec<Vec<Vec<Span>>> },
+    Table { head: Vec<Vec<Span>>, rows: Vec<Vec<Vec<Span>>>, aligns: Vec<Align> },
     Rule,
     Html(String),
+}
+
+/// Can le cot bang (dong `|:--|:-:|--:|`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+impl Align {
+    fn of(a: pulldown_cmark::Alignment) -> Align {
+        match a {
+            pulldown_cmark::Alignment::Center => Align::Center,
+            pulldown_cmark::Alignment::Right => Align::Right,
+            _ => Align::Left,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -233,6 +254,7 @@ struct Frame {
     tbl_head: Vec<Vec<Span>>,
     tbl_rows: Vec<Vec<Vec<Span>>>,
     tbl_row: Vec<Vec<Span>>,
+    tbl_aligns: Vec<Align>,
 }
 
 impl Frame {
@@ -245,6 +267,7 @@ impl Frame {
             tbl_head: Vec::new(),
             tbl_rows: Vec::new(),
             tbl_row: Vec::new(),
+            tbl_aligns: Vec::new(),
         }
     }
 }
@@ -376,6 +399,9 @@ impl MdParser {
                 Event::Html(t) | Event::InlineHtml(t) => {
                     if self.in_code {
                         self.code_text.push_str(&t);
+                    } else if is_br_tag(&t) {
+                        // <br> trong o bang / doan van -> xuong dong that
+                        self.push_span("\n".into());
                     } else {
                         let mut s = Span::plain(t.to_string());
                         s.code = true;
@@ -433,9 +459,11 @@ impl MdParser {
                 self.flush_pending();
                 self.frames.push(Frame::new(FrameKind::Quote))
             }
-            Tag::Table(_) => {
+            Tag::Table(aligns) => {
                 self.flush_pending();
-                self.frames.push(Frame::new(FrameKind::Table))
+                let mut f = Frame::new(FrameKind::Table);
+                f.tbl_aligns = aligns.iter().map(|a| Align::of(*a)).collect();
+                self.frames.push(f)
             }
             Tag::TableHead => {
                 self.in_table_head = true;
@@ -527,7 +555,8 @@ impl MdParser {
                 if let Some(mut f) = self.frames.pop() {
                     let head = std::mem::take(&mut f.tbl_head);
                     let rows = std::mem::take(&mut f.tbl_rows);
-                    self.top().blocks.push(Block::Table { head, rows });
+                    let aligns = std::mem::take(&mut f.tbl_aligns);
+                    self.top().blocks.push(Block::Table { head, rows, aligns });
                 }
             }
             TagEnd::TableHead => {
@@ -558,6 +587,12 @@ impl MdParser {
             _ => {}
         }
     }
+}
+
+/// `<br>`, `<br/>`, `<br />` (khong phan biet hoa thuong).
+fn is_br_tag(t: &str) -> bool {
+    let s: String = t.trim().chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_lowercase();
+    matches!(s.as_str(), "<br>" | "<br/>")
 }
 
 fn parse_markdown(text: &str) -> Vec<Block> {
@@ -688,23 +723,66 @@ fn show_math(ui: &mut egui::Ui, src: &str, display: bool, size: f32) -> egui::Re
 /// khong thi gop 1 LayoutJob cho dep.
 type ImgCache = std::collections::HashMap<PathBuf, Option<egui::TextureHandle>>;
 
+fn texture_from_image(ctx: &egui::Context, name: &str, img: image::DynamicImage) -> Option<egui::TextureHandle> {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], rgba.as_raw());
+    Some(ctx.load_texture(format!("mdimg-{name}"), ci, egui::TextureOptions::LINEAR))
+}
+
 fn load_image_cached(cache: &mut ImgCache, ctx: &egui::Context, path: &Path) -> Option<egui::TextureHandle> {
     if let Some(v) = cache.get(path) {
         return v.clone();
     }
-    let result = (|| -> Option<egui::TextureHandle> {
-        let img = image::open(path).ok()?;
-        let rgba = img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], rgba.as_raw());
-        Some(ctx.load_texture(
-            format!("mdimg-{}", path.display()),
-            ci,
-            egui::TextureOptions::LINEAR,
-        ))
-    })();
+    let result = image::open(path).ok().and_then(|img| texture_from_image(ctx, &path.display().to_string(), img));
     cache.insert(path.to_path_buf(), result.clone());
     result
+}
+
+fn load_image_bytes_cached(cache: &mut ImgCache, ctx: &egui::Context, key: &str, bytes: &[u8]) -> Option<egui::TextureHandle> {
+    let k = PathBuf::from(key);
+    if let Some(v) = cache.get(&k) {
+        return v.clone();
+    }
+    let result = image::load_from_memory(bytes).ok().and_then(|img| texture_from_image(ctx, key, img));
+    cache.insert(k, result.clone());
+    result
+}
+
+enum ImgState {
+    Ready(egui::TextureHandle),
+    Loading,
+    Missing,
+}
+
+/// Anh cho xem truoc: tep cuc bo, data:, hoac http(s) (tai nen, ve lai khi xong).
+fn image_texture(cache: &mut ImgCache, ctx: &egui::Context, dest: &str, doc_dir: &Path) -> ImgState {
+    match media::classify(dest, doc_dir) {
+        Some(media::Source::Local(p)) => match load_image_cached(cache, ctx, &p) {
+            Some(t) => ImgState::Ready(t),
+            None => ImgState::Missing,
+        },
+        Some(media::Source::Data(b)) => {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            match load_image_bytes_cached(cache, ctx, &format!("data:{:x}", h.finish()), &b) {
+                Some(t) => ImgState::Ready(t),
+                None => ImgState::Missing,
+            }
+        }
+        Some(media::Source::Remote(url)) => match media::remote_state(&url, Some(ctx.clone())) {
+            media::RemoteState::Loading => ImgState::Loading,
+            media::RemoteState::Failed => ImgState::Missing,
+            media::RemoteState::Ready(b) => match load_image_bytes_cached(cache, ctx, &format!("remote:{url}"), &b) {
+                Some(t) => ImgState::Ready(t),
+                None => ImgState::Missing,
+            },
+        },
+        None => ImgState::Missing,
+    }
 }
 
 fn render_spans(
@@ -740,25 +818,23 @@ fn render_spans(
             }
             if let Some(dest) = &s.image {
                 let alt = if s.text.trim().is_empty() { "ảnh".to_string() } else { s.text.clone() };
-                let is_http = dest.starts_with("http://") || dest.starts_with("https://");
-                let local = if is_http {
-                    None
-                } else {
-                    let p = PathBuf::from(dest.split('#').next().unwrap_or(dest));
-                    let full = if p.is_absolute() { p } else { doc_dir.join(p) };
-                    if full.exists() { Some(full) } else { None }
-                };
-                let tex = local.as_ref().and_then(|full| load_image_cached(cache, ui.ctx(), full));
-                if let Some(tex) = tex {
-                    let sz = tex.size_vec2();
-                    let scale = (ui.available_width().min(860.0) / sz.x).min(420.0 * zs / sz.y).min(zs.max(0.2));
-                    ui.image((tex.id(), sz * scale));
-                } else {
-                    ui.label(
-                        RichText::new(format!("[Ảnh: {alt} → {dest}]"))
-                            .color(ui.visuals().weak_text_color())
-                            .italics(),
-                    );
+                match image_texture(cache, ui.ctx(), dest, doc_dir) {
+                    ImgState::Ready(tex) => {
+                        let sz = tex.size_vec2();
+                        let scale = (ui.available_width().min(860.0) / sz.x).min(420.0 * zs / sz.y).min(zs.max(0.2));
+                        ui.image((tex.id(), sz * scale));
+                    }
+                    ImgState::Loading => {
+                        ui.label(RichText::new(format!("Đang tải ảnh: {alt}…")).color(ui.visuals().weak_text_color()).italics());
+                    }
+                    ImgState::Missing => {
+                        let shown: String = if dest.starts_with("data:") { "data:…".into() } else { dest.clone() };
+                        ui.label(
+                            RichText::new(format!("[Không tải được ảnh: {alt} → {shown}]"))
+                                .color(ui.visuals().weak_text_color())
+                                .italics(),
+                        );
+                    }
                 }
                 continue;
             }
@@ -911,7 +987,7 @@ fn render_blocks(
                     Color32::from_gray(150),
                 );
             }
-            Block::Table { head, rows } => {
+            Block::Table { head, rows, aligns } => {
                 *id_seed += 1;
                 let gid = *id_seed;
                 let ncols = head
@@ -921,6 +997,27 @@ fn render_blocks(
                 // chieu rong toi da moi o: chia theo be rong cot noi dung, khong qua 360, khong be hon 90
                 let col_w = ((ui.available_width() - 16.0 - 14.0 * (ncols as f32 - 1.0)) / ncols as f32 - 2.0)
                     .clamp(48.0, 360.0);
+                // be rong uoc tinh tung cot (de canh le trai / giua / phai co tac dung)
+                let cwid: Vec<f32> = (0..ncols)
+                    .map(|c| {
+                        let est = |cell: Option<&Vec<Span>>| -> f32 {
+                            cell.map_or(0.0, |sp| {
+                                let longest = sp.iter().map(|s| s.text.split('\n').map(|l| l.chars().count()).max().unwrap_or(0)).sum::<usize>();
+                                (longest.min(60) as f32) * 7.4 * zs + 6.0
+                            })
+                        };
+                        let mut w = est(head.get(c));
+                        for r in rows {
+                            w = w.max(est(r.get(c)));
+                        }
+                        w.clamp(40.0, col_w)
+                    })
+                    .collect();
+                let layout_of = |c: usize| match aligns.get(c) {
+                    Some(Align::Right) => egui::Layout::top_down(egui::Align::Max),
+                    Some(Align::Center) => egui::Layout::top_down(egui::Align::Center),
+                    _ => egui::Layout::top_down(egui::Align::Min),
+                };
                 egui::Frame::default()
                     .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                     .rounding(egui::Rounding::same(6.0))
@@ -933,20 +1030,30 @@ fn render_blocks(
                             .spacing([14.0, 6.0])
                             .show(ui, |ui| {
                                 if !head.is_empty() {
-                                    for cell in head {
+                                    for (c, cell) in head.iter().enumerate() {
                                         ui.scope(|ui| {
                                             ui.set_max_width(col_w);
-                                            render_spans(ui, cell, 14.0 * zs, true, doc_dir, actions, cache, true, zs);
+                                            ui.set_min_width(cwid[c.min(ncols - 1)]);
+                                            ui.with_layout(layout_of(c), |ui| {
+                                                render_spans(ui, cell, 14.0 * zs, true, doc_dir, actions, cache, true, zs);
+                                            });
                                         });
                                     }
                                     ui.end_row();
                                 }
                                 for row in rows {
-                                    for cell in row {
+                                    for (c, cell) in row.iter().enumerate() {
                                         ui.scope(|ui| {
                                             ui.set_max_width(col_w);
-                                            render_spans(ui, cell, 14.0 * zs, false, doc_dir, actions, cache, true, zs);
+                                            ui.set_min_width(cwid[c.min(ncols - 1)]);
+                                            ui.with_layout(layout_of(c), |ui| {
+                                                render_spans(ui, cell, 14.0 * zs, false, doc_dir, actions, cache, true, zs);
+                                            });
                                         });
+                                    }
+                                    // hang thieu o -> bu o trong de cac hang sau khong bi lech cot
+                                    for _ in row.len()..ncols {
+                                        ui.label("");
                                     }
                                     ui.end_row();
                                 }
@@ -959,11 +1066,13 @@ fn render_blocks(
                 ui.add_space(4.0);
             }
             Block::Html(text) => {
-                ui.label(
-                    RichText::new(text.trim()).font(FontId::monospace(11.0))
-                        .color(ui.visuals().weak_text_color()),
-                );
-                ui.add_space(4.0);
+                // khoi HTML: hien noi dung that (chu, <br>, <img>) thay vi ma nguon
+                let spans = media::html_to_spans(text);
+                if spans.is_empty() {
+                    continue;
+                }
+                render_spans(ui, &spans, 15.0 * zs, false, doc_dir, actions, cache, false, zs);
+                ui.add_space(6.0);
             }
         }
     }
@@ -1092,6 +1201,8 @@ struct Session {
     recent: Vec<String>,
     #[serde(default)]
     autosave: bool,
+    #[serde(default)]
+    accent: u8,
 }
 
 fn default_zoom() -> f32 {
@@ -1106,7 +1217,7 @@ fn load_session() -> Session {
     std::fs::read_to_string(session_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false })
+        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false, accent: 0 })
 }
 
 fn save_session(s: &Session) {
@@ -1209,7 +1320,15 @@ impl App {
             last_autosave: Instant::now(),
             fullscreen: false,
         };
-        apply_theme(&cc.egui_ctx, session.dark);
+        // (che do kiem thu giao dien) MDT_DARK=1|0, MDT_ACCENT=0..3 ghi de phien da luu
+        let dark_now = match std::env::var("MDT_DARK").as_deref() {
+            Ok("1") => true,
+            Ok("0") => false,
+            _ => session.dark,
+        };
+        app.dark = dark_now;
+        set_accent_index(std::env::var("MDT_ACCENT").ok().and_then(|a| a.parse().ok()).unwrap_or(session.accent as usize));
+        apply_theme(&cc.egui_ctx, dark_now);
         let mut files = initial_files;
         if files.is_empty() && session.restore {
             files = session.files.iter().map(PathBuf::from).filter(|p| p.exists()).collect();
@@ -1414,34 +1533,83 @@ impl App {
             .iter()
             .filter_map(|d| d.path.as_ref().map(|p| p.to_string_lossy().into_owned()))
             .collect();
-        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave });
+        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave, accent: accent_index() as u8 });
     }
 }
 
 // ------------------------------------------------------------------ theme
-pub const ACCENT: Color32 = Color32::from_rgb(21, 66, 115);
-pub const ACCENT_BRIGHT: Color32 = Color32::from_rgb(31, 111, 235);
 pub const AMBER: Color32 = Color32::from_rgb(232, 147, 12);
+
+/// Bon mau chu dao (ten, sang, toi). Nguoi dung chon trong Tro giup > Mau chu dao.
+pub const ACCENTS: [(&str, Color32, Color32); 4] = [
+    ("Xanh dương", Color32::from_rgb(37, 99, 235), Color32::from_rgb(96, 165, 250)),
+    ("Lục ngọc", Color32::from_rgb(5, 150, 105), Color32::from_rgb(52, 211, 153)),
+    ("Cam san hô", Color32::from_rgb(226, 78, 40), Color32::from_rgb(251, 146, 110)),
+    ("Tím", Color32::from_rgb(124, 58, 237), Color32::from_rgb(167, 139, 250)),
+];
+static ACCENT_IDX: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub fn accent_index() -> usize {
+    (ACCENT_IDX.load(std::sync::atomic::Ordering::Relaxed) as usize).min(ACCENTS.len() - 1)
+}
+
+pub fn set_accent_index(i: usize) {
+    ACCENT_IDX.store(i.min(ACCENTS.len() - 1) as u8, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Mau chu dao hien tai theo theme.
+pub fn accent(dark: bool) -> Color32 {
+    let (_, l, d) = ACCENTS[accent_index()];
+    if dark { d } else { l }
+}
 
 pub fn rgb(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
+pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
+}
+
+/// Nen nhat pha mau chu dao (nut dang chon, hang dang tro).
+pub fn accent_soft(dark: bool) -> Color32 {
+    if dark { mix(chrome_fill(true), accent(true), 0.26) } else { mix(Color32::WHITE, accent(false), 0.13) }
+}
+
+/// Mau bieu tuong theo nhom lenh: sac do (0..360) -> mau doc duoc tren nen hien tai.
+pub fn hue_color(hue: f32, dark: bool) -> Color32 {
+    let (s, l) = if dark { (0.85, 0.70) } else { (0.78, 0.40) };
+    let c = (1.0 - (2.0 * l - 1.0f32).abs()) * s;
+    let h = (hue % 360.0) / 60.0;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    Color32::from_rgb(((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
+}
+
 /// Mau nen "chrome" (toolbar / tabbar / status / TOC) theo theme hien tai.
 pub fn chrome_fill(dark: bool) -> Color32 {
     if dark {
-        rgb(22, 27, 34)
+        rgb(23, 28, 40)
     } else {
-        rgb(248, 249, 251)
+        rgb(244, 247, 252)
     }
 }
 
 /// Mau nen dai phia sau cac tab (khac voi nen noi dung).
 pub fn tabstrip_fill(dark: bool) -> Color32 {
     if dark {
-        rgb(13, 16, 20)
+        rgb(13, 16, 24)
     } else {
-        rgb(233, 236, 240)
+        rgb(228, 235, 246)
     }
 }
 
@@ -1449,7 +1617,7 @@ pub fn tabstrip_fill(dark: bool) -> Color32 {
 /// tranh vung "trong suot" lo nen den cua he dieu hanh.
 pub fn content_fill(dark: bool) -> Color32 {
     if dark {
-        rgb(16, 20, 26)
+        rgb(18, 22, 31)
     } else {
         Color32::WHITE
     }
@@ -1457,9 +1625,9 @@ pub fn content_fill(dark: bool) -> Color32 {
 
 pub fn border_color(dark: bool) -> Color32 {
     if dark {
-        rgb(42, 49, 60)
+        rgb(44, 52, 68)
     } else {
-        rgb(216, 220, 227)
+        rgb(214, 222, 236)
     }
 }
 
@@ -1467,59 +1635,63 @@ fn apply_theme(ctx: &egui::Context, dark: bool) {
     use egui::{Stroke, Style, TextStyle};
     let mut style = Style::default();
     let mut v = if dark { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let ac = accent(dark);
+    let soft = accent_soft(dark);
     if dark {
-        v.window_fill = rgb(13, 16, 20);
-        v.panel_fill = rgb(16, 20, 26);
-        v.faint_bg_color = rgb(27, 33, 42);
-        v.extreme_bg_color = rgb(10, 13, 17);
+        v.window_fill = rgb(20, 25, 36);
+        v.panel_fill = content_fill(true);
+        v.faint_bg_color = rgb(28, 34, 47);
+        v.extreme_bg_color = rgb(11, 14, 21);
         v.code_bg_color = rgb(13, 17, 23);
-        v.selection.bg_fill = rgb(38, 79, 130);
+        v.selection.bg_fill = mix(rgb(18, 22, 31), ac, 0.45);
         v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
-        v.hyperlink_color = rgb(88, 166, 255);
-        let border = rgb(42, 49, 60);
-        v.widgets.noninteractive.bg_fill = rgb(16, 20, 26);
+        v.hyperlink_color = ac;
+        let border = border_color(true);
+        v.widgets.noninteractive.bg_fill = content_fill(true);
         v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, border);
-        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, rgb(200, 209, 217));
-        v.widgets.inactive.bg_fill = rgb(78, 90, 108); // cung la mau tay nam thanh cuon
-        v.widgets.inactive.weak_bg_fill = rgb(22, 27, 34);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, rgb(205, 213, 226));
+        v.widgets.inactive.bg_fill = rgb(78, 90, 112); // cung la mau tay nam thanh cuon
+        v.widgets.inactive.weak_bg_fill = rgb(30, 37, 52);
         v.widgets.inactive.bg_stroke = Stroke::new(1.0, border);
-        v.widgets.inactive.fg_stroke = Stroke::new(1.0, rgb(230, 237, 243));
-        v.widgets.hovered.bg_fill = rgb(110, 124, 146);
-        v.widgets.hovered.weak_bg_fill = rgb(30, 37, 47);
-        v.widgets.hovered.bg_stroke = Stroke::new(1.0, rgb(60, 70, 85));
+        v.widgets.inactive.fg_stroke = Stroke::new(1.0, rgb(232, 238, 248));
+        v.widgets.hovered.bg_fill = rgb(112, 126, 150);
+        v.widgets.hovered.weak_bg_fill = soft;
+        v.widgets.hovered.bg_stroke = Stroke::new(1.0, mix(border, ac, 0.5));
         v.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-        v.widgets.active.bg_fill = ACCENT_BRIGHT;
-        v.widgets.active.weak_bg_fill = ACCENT_BRIGHT;
-        v.widgets.active.bg_stroke = Stroke::new(1.0, ACCENT_BRIGHT);
+        v.widgets.active.bg_fill = ac;
+        v.widgets.active.weak_bg_fill = mix(soft, ac, 0.35);
+        v.widgets.active.bg_stroke = Stroke::new(1.0, ac);
         v.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-        v.widgets.open.bg_fill = rgb(27, 33, 42);
+        v.widgets.open.bg_fill = rgb(28, 34, 47);
+        v.widgets.open.weak_bg_fill = soft;
         v.widgets.open.bg_stroke = Stroke::new(1.0, border);
     } else {
-        v.window_fill = rgb(233, 236, 240);
+        v.window_fill = Color32::WHITE;
         v.panel_fill = Color32::WHITE;
-        v.faint_bg_color = rgb(243, 245, 247);
+        v.faint_bg_color = rgb(242, 246, 252);
         v.extreme_bg_color = Color32::WHITE;
         v.code_bg_color = rgb(13, 17, 23);
-        v.selection.bg_fill = rgb(176, 214, 255);
-        v.selection.stroke = Stroke::new(1.0, rgb(10, 40, 90));
-        v.hyperlink_color = rgb(9, 105, 218);
-        let border = rgb(216, 220, 227);
+        v.selection.bg_fill = mix(Color32::WHITE, ac, 0.28);
+        v.selection.stroke = Stroke::new(1.0, mix(Color32::BLACK, ac, 0.6));
+        v.hyperlink_color = ac;
+        let border = border_color(false);
         v.widgets.noninteractive.bg_fill = Color32::WHITE;
         v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, border);
-        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, rgb(31, 35, 40));
-        v.widgets.inactive.bg_fill = rgb(196, 204, 216); // cung la mau tay nam thanh cuon
-        v.widgets.inactive.weak_bg_fill = rgb(248, 249, 251);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, rgb(28, 34, 48));
+        v.widgets.inactive.bg_fill = rgb(190, 200, 218); // cung la mau tay nam thanh cuon
+        v.widgets.inactive.weak_bg_fill = rgb(238, 243, 251);
         v.widgets.inactive.bg_stroke = Stroke::new(1.0, border);
-        v.widgets.inactive.fg_stroke = Stroke::new(1.0, rgb(31, 35, 40));
-        v.widgets.hovered.bg_fill = rgb(150, 162, 182);
-        v.widgets.hovered.weak_bg_fill = rgb(243, 245, 248);
-        v.widgets.hovered.bg_stroke = Stroke::new(1.0, rgb(190, 198, 210));
-        v.widgets.hovered.fg_stroke = Stroke::new(1.0, rgb(15, 18, 22));
-        v.widgets.active.bg_fill = ACCENT;
-        v.widgets.active.weak_bg_fill = ACCENT;
-        v.widgets.active.bg_stroke = Stroke::new(1.0, ACCENT);
+        v.widgets.inactive.fg_stroke = Stroke::new(1.0, rgb(28, 34, 48));
+        v.widgets.hovered.bg_fill = rgb(146, 160, 184);
+        v.widgets.hovered.weak_bg_fill = soft;
+        v.widgets.hovered.bg_stroke = Stroke::new(1.0, mix(border, ac, 0.5));
+        v.widgets.hovered.fg_stroke = Stroke::new(1.0, rgb(12, 16, 26));
+        v.widgets.active.bg_fill = ac;
+        v.widgets.active.weak_bg_fill = mix(soft, ac, 0.3);
+        v.widgets.active.bg_stroke = Stroke::new(1.0, ac);
         v.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-        v.widgets.open.bg_fill = rgb(243, 245, 247);
+        v.widgets.open.bg_fill = rgb(238, 243, 251);
+        v.widgets.open.weak_bg_fill = soft;
         v.widgets.open.bg_stroke = Stroke::new(1.0, border);
     }
     let rounding8 = egui::Rounding::same(8.0);
@@ -1544,6 +1716,7 @@ fn apply_theme(ctx: &egui::Context, dark: bool) {
     style.spacing.scroll.active_background_opacity = 0.4;
     style.spacing.scroll.active_handle_opacity = 0.7;
     style.spacing.interact_size.y = 28.0;
+    style.interaction.tooltip_delay = 0.25;
     style.text_styles.insert(TextStyle::Body, FontId::proportional(14.5));
     style.text_styles.insert(TextStyle::Button, FontId::proportional(14.0));
     style.text_styles.insert(TextStyle::Monospace, FontId::monospace(13.5));
@@ -1552,6 +1725,9 @@ fn apply_theme(ctx: &egui::Context, dark: bool) {
         FontId::new(19.0, egui::FontFamily::Name("InterSemiBold".into())),
     );
     style.text_styles.insert(TextStyle::Small, FontId::proportional(11.5));
+    // egui giu style rieng cho chu de sang va toi theo he thong; ep chu de truoc khi dat style
+    // de che do toi/sang cua ung dung khong bi lech so voi he dieu hanh
+    ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
     ctx.set_style(style);
 }
 
@@ -2215,6 +2391,9 @@ impl eframe::App for App {
                         vsep(ui);
                     }
                     ui.add(egui::Label::new(path_txt).truncate());
+                    vsep(ui);
+                    let (txt, col) = if doc.dirty() { ("Chưa lưu", AMBER) } else { ("Đã lưu", rgb(30, 160, 90)) };
+                    ui.label(RichText::new(format!("● {txt}")).color(col).strong());
                 } else if !self.status.is_empty() {
                     ui.label(&self.status);
                 }
@@ -2719,6 +2898,21 @@ fn main() {
 mod docx_tests {
     use super::*;
 
+    #[test]
+    fn display_math_keeps_double_backslash() {
+        let md = "$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$\n";
+        let blocks = parse_markdown(md);
+        let Some(Block::Paragraph(sp)) = blocks.first() else { panic!("{blocks:?}") };
+        println!("SPAN: {:?}", sp[0].text);
+        assert!(sp[0].text.contains("\\\\"), "mat dau xuong dong: {:?}", sp[0].text);
+        let xml = docx::build(&blocks, Path::new("."), "T", "0.5.0").unwrap();
+        let mut za = zip::ZipArchive::new(std::io::Cursor::new(xml)).unwrap();
+        let mut s = String::new();
+        use std::io::Read as _;
+        za.by_name("word/document.xml").unwrap().read_to_string(&mut s).unwrap();
+        assert_eq!(s.matches("<m:mr>").count(), 2, "ma tran phai co 2 hang: {s}");
+    }
+
     /// Tao file mau day du cac thanh phan -> /tmp/mdt-test.docx (de kiem bang validator schema ISO 29500)
     #[test]
     fn build_docx_sample() {
@@ -2727,7 +2921,7 @@ mod docx_tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
         let bytes = docx::build(&ast, &dir, "Mau", "0.5.0").expect("build docx");
         assert!(bytes.len() > 3000, "docx qua nho: {}", bytes.len());
-        let out = std::env::var("MDT_OUT").unwrap_or_else(|_| "/tmp/mdt-test.docx".into());
+        let out = std::env::var("MDT_OUT").unwrap_or_else(|_| std::env::temp_dir().join("mdt-test.docx").to_string_lossy().into_owned());
         std::fs::write(out, &bytes).unwrap();
         let mut za = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let names: Vec<String> = za.file_names().map(|s| s.to_string()).collect();

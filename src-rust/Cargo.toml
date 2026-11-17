@@ -1,6 +1,6 @@
 [package]
 name = "markdown-tabs"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Markdown Tabs - trinh xem & soan thao Markdown da tab (ban Rust native)"
 license = "MIT"
@@ -19,6 +19,7 @@ unicode-normalization = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 arboard = "3"
+ureq = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 
