@@ -2,7 +2,7 @@
 
 Trình xem và soạn thảo Markdown nhiều tab, viết bằng Rust (native, không Electron) cho Windows. Giao diện tiếng Việt.
 
-*English: a native Rust Markdown viewer/editor with tabs for Windows. It renders math without internet, fixes broken Vietnamese fonts (TCVN3, VNI) and exports to Word (.docx with editable equations), HTML and PDF. The UI is in Vietnamese.*
+**Tiếng Việt** | [English](#english)
 
 ![Xem trước với công thức, mục lục và các tab](docs/Anh-chup-v0.5-Ribbon-Sang.png)
 
@@ -43,3 +43,45 @@ Cài đặt và gỡ cài đặt cho người dùng hiện tại (không cần q
 ## Giới hạn đã biết
 
 Giao diện v0.6 mới được thử trên một máy Windows 11; chưa thử ở tỷ lệ hiển thị 125% và 150%. Xuất PDF đi qua hộp thoại In của trình duyệt (chọn "Lưu thành PDF"). Chi tiết xem ghi chú v0.6.0.
+
+## Giấy phép
+
+[MIT](LICENSE).
+
+---
+
+## English
+
+**Markdown Tabs** is a multi-tab Markdown viewer and editor written in Rust (native, no Electron) for Windows. The interface is in Vietnamese.
+
+### Features
+
+- **Multiple tabs and three view modes:** Edit, Preview and Split (Ctrl+1, 2, 3). Opening a file goes straight to Preview. Table of contents on the left, recent files, reopen closed tabs, auto-save.
+- **Math rendered offline:** fractions, roots, sub and superscripts, sums, integrals, limits, matrices, cases, Greek letters, vectors.
+- **Fix layout, fonts and formulas** (Tools menu, Ctrl+Shift+F): a dialog lists the planned changes before applying them, with undo.
+- **Export:** Word (.docx, with formulas converted to editable Word equations), HTML, PDF through the print dialog, plain text; copy as HTML or Markdown.
+- **Interface:** tabbed ribbon, light and dark modes, four accent colors.
+
+### Font and formula fixes
+
+- Mojibake (UTF-8 read as Windows-1252), for example `Viá»‡t` to `Việt`.
+- Legacy Vietnamese fonts **TCVN3 (.VnTime)** and **VNI** to Unicode.
+- Symbol and MathType font characters pasted from Word (boxes, odd characters) to Greek letters and math symbols.
+- Normalizes combining marks, removes invisible characters, fixes whitespace and line endings, adds missing table separator rows, list bullets and headings without a space after `#`.
+- Formulas: `\( ... \)` and `\[ ... \]` to `$ ... $` and `$$ ... $$`; escapes `\$` for currency; checks formulas and reports errors with line numbers.
+
+### Build on Windows
+
+Requires 64-bit Windows. Run `Bien-dich-Windows.bat`: it downloads the rustup installer if Rust is missing, builds with `cargo build --release` and copies `MarkdownTabs.exe` to the repository root. Source code is in `src-rust/`. A GitHub Actions workflow (`build-windows`) also builds the Windows binary on every push. For a per-user install without administrator rights, use `Cai-dat-MarkdownTabs-Rust_v0.5.bat` (uninstall: `Go-cai-dat-MarkdownTabs-Rust_v0.5.bat`).
+
+### Documentation (Vietnamese)
+
+[Quick guide](docs/README_HUONG_DAN-RUST_v0.5.md), [v0.5.0 notes](docs/GHI-CHU-v0.5.0.md), [v0.6.0 notes](docs/GHI-CHU-v0.6.0.md), [version history](LICHSU-REV.md). Sample files for testing are in `mau-thu/`.
+
+### Known limitations
+
+The v0.6 interface was only tested on one Windows 11 machine, not yet at 125% and 150% display scaling. PDF export goes through the browser print dialog (choose "Save as PDF").
+
+### License
+
+[MIT](LICENSE).
