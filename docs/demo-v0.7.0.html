@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light" data-accent="blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown Tabs v0.7 — Bản mẫu giao diện tương tác</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", ui-monospace, monospace;
+  --font-math: "Cambria Math", "Times New Roman", Georgia, serif;
+
+  /* 4-tier Light Surfaces */
+  --bg-tabstrip: #E8EDF4;
+  --bg-chrome: #F3F6FA;
+  --bg-canvas: #EEF2F7;
+  --bg-paper: #FFFFFF;
+  --bg-code: #F6F8FA;
+  --bg-tbl-head: #F1F5F9;
+  --bg-hover: rgba(15, 23, 42, 0.06);
+
+  --border: #D5DEE9;
+  --border-strong: #B8C5D6;
+  --ink: #0F172A;
+  --ink-2: #334155;
+  --ink-3: #64748B;
+
+  --ok: #059669;
+  --amber: #D97706;
+  --danger: #DC2626;
+
+  /* Accent: Blue default */
+  --accent: #2563EB;
+  --accent-text: #1D4ED8;
+  --accent-soft: #DBEAFE;
+  --accent-line: #93C5FD;
+  --accent-fg: #FFFFFF;
+
+  --shadow-paper: 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 20px rgba(15, 23, 42, 0.04);
+  --shadow-pop: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] {
+  --bg-tabstrip: #0B0F17;
+  --bg-chrome: #121824;
+  --bg-canvas: #0F141E;
+  --bg-paper: #182030;
+  --bg-code: #0D1117;
+  --bg-tbl-head: #1E293B;
+  --bg-hover: rgba(248, 250, 252, 0.07);
+
+  --border: #263245;
+  --border-strong: #3B4C66;
+  --ink: #F1F5F9;
+  --ink-2: #CBD5E1;
+  --ink-3: #94A3B8;
+
+  --ok: #34D399;
+  --amber: #FBBF24;
+  --danger: #F87171;
+
+  --shadow-paper: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+[data-accent="blue"] {
+  --accent: #2563EB; --accent-text: #1D4ED8; --accent-soft: #DBEAFE; --accent-line: #93C5FD; --accent-fg: #FFFFFF;
+}
+[data-theme="dark"][data-accent="blue"] {
+  --accent: #60A5FA; --accent-text: #93C5FD; --accent-soft: rgba(96, 165, 250, 0.18); --accent-line: rgba(96, 165, 250, 0.45); --accent-fg: #0B0F17;
+}
+
+[data-accent="emerald"] {
+  --accent: #059669; --accent-text: #047857; --accent-soft: #D1FAE5; --accent-line: #6EE7B7; --accent-fg: #FFFFFF;
+}
+[data-theme="dark"][data-accent="emerald"] {
+  --accent: #34D399; --accent-text: #6EE7B7; --accent-soft: rgba(52, 211, 153, 0.18); --accent-line: rgba(52, 211, 153, 0.45); --accent-fg: #0B0F17;
+}
+
+[data-accent="coral"] {
+  --accent: #E24E28; --accent-text: #C2410C; --accent-soft: #FFEDD5; --accent-line: #FDBA74; --accent-fg: #FFFFFF;
+}
+[data-theme="dark"][data-accent="coral"] {
+  --accent: #FB926E; --accent-text: #FDBA74; --accent-soft: rgba(251, 146, 110, 0.18); --accent-line: rgba(251, 146, 110, 0.45); --accent-fg: #0B0F17;
+}
+
+[data-accent="violet"] {
+  --accent: #7C3AED; --accent-text: #6D28D9; --accent-soft: #EDE9FE; --accent-line: #C4B5FD; --accent-fg: #FFFFFF;
+}
+[data-theme="dark"][data-accent="violet"] {
+  --accent: #A78BFA; --accent-text: #C4B5FD; --accent-soft: rgba(167, 139, 250, 0.18); --accent-line: rgba(167, 139, 250, 0.45); --accent-fg: #0B0F17;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  font-family: var(--font-ui); font-size: 14px; color: var(--ink);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden;
+}
+
+/* ROW 1: UNIFIED TITLE + TABS + VIEW + THEME (~40px) */
+.top-header {
+  height: 40px; flex: 0 0 40px;
+  background: var(--bg-tabstrip);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: stretch; gap: 6px;
+  padding: 0 10px 0 8px;
+  user-select: none;
+}
+
+.brand-btn {
+  display: flex; align-items: center; gap: 6px;
+  border: 0; background: transparent; padding: 0 6px; cursor: pointer;
+  color: var(--ink); border-radius: 6px; margin: 4px 0;
+}
+.brand-btn:hover { background: var(--bg-hover); }
+.brand-mark {
+  width: 24px; height: 24px; border-radius: 7px;
+  background: var(--accent); color: var(--accent-fg);
+  font-weight: 700; font-size: 13px;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+
+.tabs-strip {
+  flex: 1; min-width: 0;
+  display: flex; align-items: flex-end; gap: 3px;
+  overflow-x: auto; scrollbar-width: none;
+  padding-top: 5px;
+}
+.tabs-strip::-webkit-scrollbar { display: none; }
+
+.doc-tab {
+  position: relative;
+  height: 35px; max-width: 210px; min-width: 110px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 8px 0 11px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid transparent; border-bottom: 0;
+  background: transparent; color: var(--ink-2);
+  font-size: 13px; cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+  flex-shrink: 0;
+}
+.doc-tab:hover { background: var(--bg-hover); color: var(--ink); }
+.doc-tab.active {
+  background: var(--bg-chrome);
+  color: var(--ink); font-weight: 600;
+  border-color: var(--border);
+  margin-bottom: -1px; padding-bottom: 1px;
+}
+.doc-tab.active::before {
+  content: ""; position: absolute; left: 8px; right: 8px; top: 0;
+  height: 2.5px; border-radius: 0 0 2px 2px; background: var(--accent);
+}
+.doc-tab-icon { width: 14px; height: 14px; flex-shrink: 0; color: var(--ink-3); }
+.doc-tab.active .doc-tab-icon { color: var(--accent); }
+.doc-tab-dirty {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex-shrink: 0;
+  display: none;
+}
+.doc-tab.dirty .doc-tab-dirty { display: block; }
+.doc-tab-title {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+}
+.doc-tab-close {
+  width: 18px; height: 18px; border-radius: 4px; border: 0;
+  background: transparent; color: var(--ink-3);
+  display: grid; place-items: center; cursor: pointer; font-size: 14px; line-height: 1;
+  opacity: 0.65;
+}
+.doc-tab-close:hover { background: var(--bg-hover); color: var(--ink); opacity: 1; }
+
+.tab-new-btn {
+  width: 28px; height: 28px; margin-bottom: 3px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.tab-new-btn:hover { background: var(--bg-hover); color: var(--ink); }
+
+.header-right {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+
+.seg-control {
+  display: flex; align-items: center; gap: 2px;
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 2px;
+}
+.seg-btn {
+  display: flex; align-items: center; gap: 5px;
+  height: 25px; padding: 0 9px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2);
+  font-family: var(--font-ui); font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all 0.14s; white-space: nowrap;
+}
+.seg-btn:hover { color: var(--ink); background: var(--bg-hover); }
+.seg-btn.active {
+  background: var(--accent); color: var(--accent-fg); font-weight: 600;
+}
+.seg-btn svg { width: 14px; height: 14px; }
+
+.icon-btn {
+  width: 28px; height: 28px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--ink-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  cursor: pointer; transition: all 0.12s; position: relative;
+  font-family: var(--font-ui); font-size: 12.5px;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--ink); }
+.icon-btn.active {
+  background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line);
+}
+.icon-btn.primary-action {
+  width: auto; padding: 0 9px; gap: 5px;
+  background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line);
+  font-weight: 600; font-size: 12.5px;
+}
+.icon-btn.primary-action:hover { background: var(--accent); color: var(--accent-fg); }
+.icon-btn svg { width: 16px; height: 16px; stroke-width: 1.85; }
+.icon-btn.has-menu { width: auto; padding: 0 6px; }
+.chevron { width: 10px !important; height: 10px !important; opacity: 0.7; }
+
+.cmd-trigger {
+  height: 26px; padding: 0 9px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-chrome);
+  color: var(--ink-3); font-family: var(--font-ui); font-size: 12px;
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.cmd-trigger:hover { border-color: var(--accent-line); color: var(--ink); }
+.kbd {
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 1px 4px; border-radius: 4px;
+  background: var(--bg-tabstrip); color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+
+/* ROW 2: CONTEXTUAL COMPACT TOOLBAR (~36px) */
+.toolbar-row {
+  height: 36px; flex: 0 0 36px;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 10px;
+  overflow-x: auto; scrollbar-width: none;
+  user-select: none;
+}
+.toolbar-row::-webkit-scrollbar { display: none; }
+.app-shell.zen .toolbar-row,
+.app-shell.zen .sidebar,
+.app-shell.zen .statusbar { display: none !important; }
+.app-shell.toolbar-hidden .toolbar-row { display: none; }
+
+.tb-group {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 4px;
+}
+.tb-sep {
+  width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0;
+}
+.tb-spacer { flex: 1; }
+
+.math-pill {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  padding: 0 7px; width: auto;
+}
+
+/* WORKSPACE MAIN AREA */
+.workspace {
+  flex: 1; min-height: 0; display: flex; position: relative;
+}
+
+/* LEFT DUAL SIDEBAR */
+.sidebar {
+  width: 248px; flex: 0 0 auto;
+  background: var(--bg-chrome);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.sidebar.hidden { display: none; }
+.sidebar.hidden + .resizer { display: none; }
+
+/* DRAG RESIZERS */
+.resizer {
+  width: 6px; flex: 0 0 6px;
+  cursor: col-resize; position: relative;
+  background: transparent; z-index: 15;
+  touch-action: none; user-select: none;
+}
+.resizer::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px;
+  background: var(--border); transition: background 0.12s, width 0.12s, left 0.12s;
+}
+.resizer::after {
+  content: ""; position: absolute; top: 50%; left: 1px;
+  width: 3px; height: 28px; margin-top: -14px; border-radius: 2px;
+  background: var(--border-strong); opacity: 0; transition: opacity 0.14s, background 0.14s;
+}
+.resizer:hover::before, .resizer.dragging::before {
+  left: 1px; width: 3px; background: var(--accent);
+}
+.resizer:hover::after, .resizer.dragging::after {
+  opacity: 1; background: var(--accent);
+}
+.app-shell.zen .resizer { display: none !important; }
+body.is-resizing { cursor: col-resize !important; user-select: none !important; }
+body.is-resizing * { cursor: col-resize !important; }
+
+.sb-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  padding: 6px 8px 0; gap: 4px; flex-shrink: 0;
+}
+.sb-tab {
+  flex: 1; border: 0; background: transparent;
+  padding: 6px 8px 8px; font-family: var(--font-ui);
+  font-size: 12px; font-weight: 600; color: var(--ink-3);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+.sb-tab:hover { color: var(--ink); }
+.sb-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); }
+
+.sb-search-wrap {
+  padding: 8px 10px 6px; flex-shrink: 0;
+}
+.sb-search {
+  width: 100%; height: 28px; padding: 0 9px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-paper); color: var(--ink);
+  font-family: var(--font-ui); font-size: 12.5px;
+  outline: none;
+}
+.sb-search:focus { border-color: var(--accent); }
+
+.sb-content {
+  flex: 1; overflow-y: auto; padding: 4px 8px 14px;
+}
+
+.toc-item {
+  display: flex; align-items: center; width: 100%;
+  border: 0; background: transparent; text-align: left;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  color: var(--ink-2); font-family: var(--font-ui); font-size: 12.5px;
+  line-height: 1.35; position: relative;
+  border-left: 2.5px solid transparent;
+  transition: background 0.1s, color 0.1s;
+}
+.toc-item:hover { background: var(--bg-hover); color: var(--ink); }
+.toc-item.active {
+  background: var(--accent-soft); color: var(--accent-text);
+  font-weight: 600; border-left-color: var(--accent);
+}
+.toc-item.l1 { font-weight: 600; color: var(--ink); padding-left: 8px; }
+.toc-item.l2 { padding-left: 20px; }
+.toc-item.l3 { padding-left: 32px; font-size: 12px; color: var(--ink-3); }
+.toc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tree-folder {
+  font-size: 11.5px; font-weight: 700; color: var(--ink-3);
+  padding: 8px 6px 4px; display: flex; align-items: center; gap: 6px;
+}
+.tree-file {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  border: 0; background: transparent; padding: 6px 8px 6px 18px;
+  border-radius: 6px; color: var(--ink-2); font-family: var(--font-ui);
+  font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.tree-file:hover { background: var(--bg-hover); color: var(--ink); }
+.tree-file.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+
+/* CONTENT PANES */
+.panes {
+  flex: 1; min-width: 0; display: flex; position: relative; overflow: hidden;
+}
+
+/* EDITOR PANE */
+.editor-pane {
+  flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column;
+  background: var(--bg-paper);
+  position: relative;
+}
+.panes[data-view="preview"] .editor-pane,
+.panes[data-view="preview"] .resizer-split { display: none; }
+.panes[data-view="edit"] .editor-pane { flex: 1 1 100% !important; width: auto !important; }
+.panes[data-view="edit"] .preview-pane,
+.panes[data-view="edit"] .resizer-split { display: none; }
+
+.editor-body {
+  flex: 1; min-height: 0; display: flex; position: relative; overflow: hidden;
+}
+
+.editor-gutter {
+  width: 44px; flex: 0 0 44px;
+  background: var(--bg-chrome);
+  border-right: 1px solid var(--border);
+  padding: 16px 8px 16px 0;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  color: var(--ink-3); text-align: right;
+  overflow: hidden; user-select: none;
+}
+.editor-gutter .cur-ln { color: var(--accent-text); font-weight: 600; }
+
+.editor-scroll {
+  flex: 1; min-width: 0; position: relative; overflow: auto;
+}
+.editor-textarea {
+  width: 100%; min-height: 100%; height: 100%;
+  border: 0; outline: none; resize: none;
+  padding: 16px 20px;
+  background: transparent; color: var(--ink);
+  font-family: var(--font-mono); font-size: 13.5px; line-height: 1.65;
+  tab-size: 2;
+  white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
+}
+.editor-textarea.nowrap {
+  white-space: pre; overflow-x: auto;
+}
+
+/* FLOATING FIND BAR */
+.find-float {
+  position: absolute; top: 10px; right: 16px; z-index: 30;
+  background: var(--bg-paper); border: 1px solid var(--border-strong);
+  border-radius: 10px; box-shadow: var(--shadow-pop);
+  padding: 8px 10px; display: none; flex-direction: column; gap: 6px;
+  width: 340px; max-width: calc(100% - 24px);
+}
+.find-float.open { display: flex; }
+.find-row { display: flex; align-items: center; gap: 5px; }
+.find-input {
+  flex: 1; min-width: 0; height: 28px; padding: 0 8px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-chrome); color: var(--ink);
+  font-family: var(--font-ui); font-size: 12.5px; outline: none;
+}
+.find-input:focus { border-color: var(--accent); background: var(--bg-paper); }
+.find-count {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3);
+  min-width: 38px; text-align: center;
+}
+.mini-btn {
+  height: 26px; padding: 0 7px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--bg-chrome);
+  color: var(--ink-2); font-family: var(--font-ui); font-size: 12px;
+  cursor: pointer; white-space: nowrap;
+}
+.mini-btn:hover { background: var(--bg-hover); color: var(--ink); }
+.mini-btn.active { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line); }
+
+/* PREVIEW PANE WITH CENTERED PAPER SHEET */
+.preview-pane {
+  flex: 1; min-width: 0; overflow-y: auto;
+  background: var(--bg-canvas);
+  padding: 22px 24px 48px;
+  scroll-behavior: smooth;
+}
+.paper-sheet {
+  max-width: 820px; margin: 0 auto;
+  background: var(--bg-paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-paper);
+  padding: 36px clamp(24px, 4vw, 48px) 48px;
+  font-size: calc(15px * var(--zoom, 1));
+  line-height: 1.72;
+  color: var(--ink);
+}
+
+/* Rendered Markdown Typography */
+.paper-sheet h1 {
+  margin: 0 0 16px; font-size: 1.85em; font-weight: 700; line-height: 1.25;
+  letter-spacing: -0.02em; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border); color: var(--ink);
+}
+.paper-sheet h2 {
+  margin: 28px 0 12px; font-size: 1.38em; font-weight: 700; line-height: 1.3;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border); color: var(--ink);
+}
+.paper-sheet h3 {
+  margin: 22px 0 8px; font-size: 1.12em; font-weight: 600; color: var(--ink);
+}
+.paper-sheet p { margin: 0 0 13px; color: var(--ink-2); }
+.paper-sheet strong { color: var(--ink); font-weight: 600; }
+.paper-sheet code.inline-code {
+  font-family: var(--font-mono); font-size: 0.88em;
+  background: var(--bg-code); border: 1px solid var(--border);
+  padding: 1px 5px; border-radius: 5px; color: var(--accent-text);
+}
+.paper-sheet ul, .paper-sheet ol { margin: 0 0 14px; padding-left: 24px; color: var(--ink-2); }
+.paper-sheet li { margin-bottom: 5px; }
+
+.md-code-wrap {
+  position: relative; margin: 14px 0 18px;
+  background: var(--bg-code); border: 1px solid var(--border);
+  border-radius: 9px; overflow: hidden;
+}
+.md-code-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 12px; border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3);
+}
+.copy-code-btn {
+  border: 1px solid var(--border); background: var(--bg-paper);
+  color: var(--ink-2); border-radius: 5px; padding: 2px 8px;
+  font-family: var(--font-ui); font-size: 11.5px; cursor: pointer;
+}
+.copy-code-btn:hover { border-color: var(--accent); color: var(--accent-text); }
+.md-code-wrap pre {
+  margin: 0; padding: 12px 14px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 0.86em; line-height: 1.55; color: var(--ink);
+}
+
+.md-callout {
+  margin: 14px 0 18px; padding: 12px 16px;
+  border-radius: 8px; border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+}
+.md-callout.warn {
+  border-left-color: var(--amber);
+  background: rgba(217, 119, 6, 0.10);
+}
+.md-callout-title {
+  font-size: 12.5px; font-weight: 700; margin-bottom: 4px;
+  color: var(--accent-text); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.md-callout.warn .md-callout-title { color: var(--amber); }
+
+.md-quote {
+  margin: 12px 0 16px; padding: 4px 0 4px 16px;
+  border-left: 3.5px solid var(--border-strong); color: var(--ink-3); font-style: italic;
+}
+
+.md-math-block {
+  margin: 16px 0; padding: 14px 16px; text-align: center;
+  background: var(--bg-chrome); border: 1px solid var(--border); border-radius: 8px;
+  font-family: var(--font-math); font-size: 1.18em; font-style: italic; color: var(--ink);
+}
+.md-math-inline {
+  font-family: var(--font-math); font-style: italic; color: var(--ink);
+  padding: 0 2px;
+}
+
+.md-table-wrap {
+  margin: 14px 0 18px; overflow-x: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.md-table {
+  width: 100%; border-collapse: collapse; font-size: 0.92em;
+}
+.md-table th {
+  background: var(--bg-tbl-head); color: var(--ink); font-weight: 600;
+  padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: left;
+}
+.md-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--ink-2);
+}
+.md-table tr:last-child td { border-bottom: 0; }
+
+.md-figure {
+  margin: 18px auto; text-align: center;
+  padding: 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-chrome);
+}
+.md-figure figcaption {
+  margin-top: 8px; font-size: 12.5px; color: var(--ink-3);
+}
+
+/* CLEAN 3-ZONE BOTTOM STATUS BAR (~26px) */
+.statusbar {
+  height: 26px; flex: 0 0 26px;
+  background: var(--bg-chrome);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; font-size: 12px; color: var(--ink-2);
+  user-select: none; gap: 12px;
+}
+.sb-left, .sb-center, .sb-right {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+.sb-center { flex: 1; justify-content: center; overflow: hidden; }
+.save-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-weight: 600; white-space: nowrap;
+}
+.save-badge.saved { color: var(--ok); }
+.save-badge.dirty { color: var(--amber); }
+.sb-path {
+  color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 240px;
+}
+.sb-toast {
+  color: var(--accent-text); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sb-pill {
+  border: 0; background: transparent; color: var(--ink-2);
+  font-family: var(--font-ui); font-size: 11.5px; padding: 2px 6px;
+  border-radius: 4px; cursor: pointer; white-space: nowrap;
+}
+.sb-pill:hover { background: var(--bg-hover); color: var(--ink); }
+.sb-pill.on { color: var(--accent-text); font-weight: 600; }
+.sb-mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+
+/* POPOVERS & CONTEXT MENUS */
+.popover {
+  position: fixed; z-index: 60;
+  background: var(--bg-paper); border: 1px solid var(--border-strong);
+  border-radius: 10px; box-shadow: var(--shadow-pop);
+  padding: 6px; min-width: 185px; display: none;
+}
+.popover.open { display: block; }
+.pop-item {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  border: 0; background: transparent; color: var(--ink);
+  font-family: var(--font-ui); font-size: 12.5px;
+  padding: 6px 10px; border-radius: 6px; cursor: pointer; text-align: left; gap: 12px;
+}
+.pop-item:hover { background: var(--accent-soft); color: var(--accent-text); }
+.pop-sep { height: 1px; background: var(--border); margin: 4px 0; }
+.pop-label { font-size: 11px; font-weight: 600; color: var(--ink-3); padding: 4px 10px; }
+
+.accent-row { display: flex; gap: 8px; padding: 6px 10px 8px; }
+.accent-dot {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: transform 0.12s;
+}
+.accent-dot:hover { transform: scale(1.12); }
+.accent-dot.active { box-shadow: 0 0 0 2px var(--bg-paper), 0 0 0 4px var(--ink); }
+
+/* MODALS (Command Palette + Fixer Diff) */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: none; align-items: flex-start; justify-content: center;
+  padding-top: 72px;
+}
+.modal-backdrop.open { display: flex; }
+.modal-box {
+  width: 520px; max-width: calc(100vw - 32px);
+  background: var(--bg-paper); border: 1px solid var(--border-strong);
+  border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.modal-box.wide { width: 640px; }
+
+.cmd-input {
+  width: 100%; border: 0; border-bottom: 1px solid var(--border);
+  padding: 14px 16px; background: transparent; color: var(--ink);
+  font-family: var(--font-ui); font-size: 14.5px; outline: none;
+}
+.cmd-list { max-height: 310px; overflow-y: auto; padding: 6px; }
+.cmd-item {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  border: 0; background: transparent; padding: 8px 12px; border-radius: 7px;
+  color: var(--ink); font-family: var(--font-ui); font-size: 13px; cursor: pointer;
+}
+.cmd-item:hover, .cmd-item.selected { background: var(--accent-soft); color: var(--accent-text); }
+
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.modal-body { padding: 16px 18px; max-height: 62vh; overflow-y: auto; }
+.modal-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--border); background: var(--bg-chrome);
+}
+
+.fx-check {
+  display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;
+  font-size: 13px; color: var(--ink-2); cursor: pointer;
+}
+.diff-box {
+  margin-top: 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-code); padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+}
+.diff-del { color: var(--danger); text-decoration: line-through; display: block; }
+.diff-add { color: var(--ok); display: block; }
+
+.btn {
+  height: 32px; padding: 0 14px; border-radius: 7px;
+  border: 1px solid var(--border-strong); background: var(--bg-paper);
+  color: var(--ink); font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+  cursor: pointer;
+}
+.btn:hover { background: var(--bg-hover); }
+.btn.primary {
+  background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600;
+}
+
+.icon-btn.export-ico svg { width: 17px; height: 17px; stroke-width: 1.75; }
+.icon-btn.export-ico:hover { color: var(--accent-text); background: var(--accent-soft); }
+
+@media print {
+  .top-header, .toolbar-row, .sidebar, .editor-pane, .statusbar, .popover, .modal-backdrop { display: none !important; }
+  .app-shell, .workspace, .panes, .preview-pane { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; background: #fff !important; }
+  .paper-sheet { border: 0 !important; box-shadow: none !important; max-width: 100% !important; padding: 0 !important; }
+}
+
+@media (max-width: 820px) {
+  .sidebar { position: absolute; left: 0; top: 0; bottom: 0; z-index: 25; box-shadow: var(--shadow-pop); }
+  .cmd-trigger .cmd-text, .seg-btn span { display: none; }
+  .sb-path { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell" id="appShell">
+
+  <!-- ROW 1: UNIFIED TITLE + TABS + VIEW SWITCHER + THEME -->
+  <header class="top-header">
+    <button class="brand-btn" id="btnToggleSidebar" title="Hiện / ẩn thanh bên (Mục lục &amp; Thư mục)">
+      <span class="brand-mark">M</span>
+    </button>
+
+    <div class="tabs-strip" id="tabsStrip"></div>
+
+    <button class="tab-new-btn" id="btnNewTab" title="Tab mới (Ctrl+N)">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+
+    <div class="header-right">
+      <button class="cmd-trigger" id="btnCmdPalette" title="Bảng lệnh nhanh (Ctrl+K)">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <span class="cmd-text">Tìm lệnh…</span>
+        <span class="kbd">Ctrl+K</span>
+      </button>
+
+      <div class="seg-control" id="viewSwitcher">
+        <button class="seg-btn" data-mode="edit" title="Chỉ soạn thảo (Ctrl+1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>
+          <span>Soạn thảo</span>
+        </button>
+        <button class="seg-btn active" data-mode="preview" title="Chỉ xem trước (Ctrl+2)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Xem trước</span>
+        </button>
+        <button class="seg-btn" data-mode="split" title="Chia đôi (Ctrl+3)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/></svg>
+          <span>Chia đôi</span>
+        </button>
+      </div>
+
+      <button class="icon-btn" id="btnAccentPop" title="Màu chủ đạo &amp; Hiển thị">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="var(--accent)" stroke="none"/></svg>
+      </button>
+
+      <button class="icon-btn" id="btnTheme" title="Chuyển Sáng / Tối">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+
+      <button class="icon-btn" id="btnZen" title="Chế độ Tập trung / Zen (ẩn thanh công cụ &amp; mục lục)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ROW 2: CONTEXTUAL COMPACT TOOLBAR -->
+  <div class="toolbar-row" id="toolbarRow">
+    <div class="tb-group">
+      <button class="icon-btn" id="tbSave" title="Lưu tài liệu (Ctrl+S)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>
+      </button>
+      <button class="icon-btn has-menu" id="tbRecent" title="Tệp mở gần đây">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+    <span class="tb-sep"></span>
+    <div class="tb-group">
+      <button class="icon-btn export-ico" id="tbExportDocx" title="Xuất Word (.docx) — công thức OMML sửa được">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V9z"/><path d="M14 3v6h6"/><path d="M7.5 12.5l1.4 5 1.6-3.8 1.6 3.8 1.4-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn export-ico" id="tbExportPdf" title="Xuất PDF (.pdf)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V9z"/><path d="M14 3v6h6"/><path d="M8 17v-5h2.2a1.7 1.7 0 0 1 0 3.4H8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 14.5h2.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="icon-btn export-ico" id="tbExportMd" title="Xuất Markdown (.md)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M6.5 15V9l2.5 3 2.5-3v6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 9v6m-2-2l2 2 2-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn export-ico" id="tbExportHtml" title="Xuất HTML (.html) độc lập, nhúng ảnh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M3.5 12h17M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18"/></svg>
+      </button>
+      <button class="icon-btn export-ico" id="tbPrint" title="In tài liệu (Ctrl+P)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 9V4h10v5"/><path d="M6 17H4.5A1.5 1.5 0 0 1 3 15.5v-4A2.5 2.5 0 0 1 5.5 9h13A2.5 2.5 0 0 1 21 11.5v4a1.5 1.5 0 0 1-1.5 1.5H18"/><rect x="7" y="14" width="10" height="6" rx="1"/></svg>
+      </button>
+    </div>
+    <span class="tb-sep"></span>
+
+    <div class="tb-group">
+      <button class="icon-btn" data-fmt="bold" title="Đậm (Ctrl+B)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg>
+      </button>
+      <button class="icon-btn" data-fmt="italic" title="Nghiêng (Ctrl+I)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 5h8M6 19h8M15 5l-5 14"/></svg>
+      </button>
+      <button class="icon-btn" data-fmt="code" title="Mã nội dòng">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/></svg>
+      </button>
+      <button class="icon-btn has-menu" id="tbHeading" title="Tiêu đề (H1–H3)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 5v14M18 5v14M6 12h12"/></svg>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <button class="icon-btn" data-fmt="list" title="Danh sách chấm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+      </button>
+      <button class="icon-btn" data-fmt="callout" title="Chèn khung lưu ý kỹ thuật [!NOTE]">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 9v4M12 16h.01"/></svg>
+      </button>
+    </div>
+    <span class="tb-sep"></span>
+
+    <div class="tb-group">
+      <button class="icon-btn" data-fmt="table" title="Chèn bảng số liệu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>
+      </button>
+      <button class="icon-btn math-pill" data-fmt="math-inline" title="Công thức nội dòng $x$">$x$</button>
+      <button class="icon-btn math-pill" data-fmt="math-block" title="Công thức riêng dòng $$…$$">$$</button>
+      <button class="icon-btn has-menu" id="tbMathTpl" title="Mẫu công thức kỹ thuật">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 5H6l6 7-6 7h12"/></svg>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+    <span class="tb-sep"></span>
+
+    <div class="tb-group">
+      <button class="icon-btn" id="tbFind" title="Tìm &amp; Thay thế (Ctrl+F)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      </button>
+      <button class="icon-btn" id="tbFixer" title="Sửa lỗi font TCVN3/VNI, MathType &amp; trình bày (Ctrl+Shift+F)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 19L15 9M14 3.5l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1z"/></svg>
+      </button>
+    </div>
+
+
+  </div>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="workspace">
+    <!-- DUAL SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-tabs">
+        <button class="sb-tab active" data-sb="toc">Mục lục</button>
+        <button class="sb-tab" data-sb="files">Thư mục</button>
+      </div>
+      <div class="sb-search-wrap" id="sbSearchWrap">
+        <input class="sb-search" id="tocFilter" type="text" placeholder="Lọc tiêu đề…">
+      </div>
+      <div class="sb-content" id="sbContent"></div>
+    </aside>
+    <div class="resizer" id="resizerSidebar" title="Kéo để chỉnh độ rộng Mục lục / Thư mục (nhấp đúp để đặt lại)"></div>
+
+    <!-- PANES -->
+    <div class="panes" id="panes" data-view="preview">
+      <!-- EDITOR -->
+      <section class="editor-pane">
+        <!-- Floating Find & Replace -->
+        <div class="find-float" id="findFloat">
+          <div class="find-row">
+            <input class="find-input" id="findInput" type="text" placeholder="Tìm trong tài liệu…">
+            <span class="find-count" id="findCount">0/0</span>
+            <button class="mini-btn" id="btnFindPrev" title="Kết quả trước">↑</button>
+            <button class="mini-btn" id="btnFindNext" title="Kết quả tiếp">↓</button>
+            <button class="mini-btn" id="btnFindCase" title="Phân biệt hoa/thường">Aa</button>
+            <button class="mini-btn" id="btnFindClose" title="Đóng (Esc)">×</button>
+          </div>
+          <div class="find-row">
+            <input class="find-input" id="replaceInput" type="text" placeholder="Thay bằng…">
+            <button class="mini-btn" id="btnReplaceOne">Thay</button>
+            <button class="mini-btn" id="btnReplaceAll">Tất cả</button>
+          </div>
+        </div>
+
+        <div class="editor-body">
+          <div class="editor-gutter" id="editorGutter">1</div>
+          <div class="editor-scroll" id="editorScroll">
+            <textarea class="editor-textarea" id="editorInput" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
+      <div class="resizer resizer-split" id="resizerSplit" title="Kéo để chỉnh tỷ lệ Soạn thảo / Xem trước (nhấp đúp để chia 50/50)"></div>
+
+      <!-- PREVIEW -->
+      <section class="preview-pane" id="previewPane">
+        <article class="paper-sheet" id="previewContent"></article>
+      </section>
+    </div>
+  </div>
+
+  <!-- ROW 3: CLEAN 3-ZONE STATUS BAR -->
+  <footer class="statusbar">
+    <div class="sb-left">
+      <span class="save-badge saved" id="saveBadge">● Đã lưu</span>
+      <span class="sb-path" id="sbFileName">Bao-cao-An-mon-PM3.md</span>
+    </div>
+    <div class="sb-center">
+      <span class="sb-toast" id="sbToast"></span>
+    </div>
+    <div class="sb-right">
+      <button class="sb-pill on" id="btnToggleWrap" title="Bật / tắt tự xuống dòng mềm trong khung Soạn thảo">Wrap: Bật</button>
+      <button class="sb-pill on" id="btnToggleSync" title="Bật / tắt cuộn đồng bộ giữa Soạn thảo và Xem trước">Cuộn đồng bộ</button>
+      <button class="sb-pill" id="btnZoomOut" title="Thu nhỏ">−</button>
+      <button class="sb-pill" id="btnZoomReset" title="Đặt lại 100%">100%</button>
+      <button class="sb-pill" id="btnZoomIn" title="Phóng to">+</button>
+      <span class="sb-mono" id="sbCursor">Dòng 1, Cột 1</span>
+      <span class="sb-mono" id="sbWords">0 từ</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- POPOVERS -->
+<div class="popover" id="popAccent">
+  <div class="pop-label">Màu chủ đạo (lưu theo phiên)</div>
+  <div class="accent-row">
+    <button class="accent-dot active" data-ac="blue" style="background:#2563EB" title="Xanh dương"></button>
+    <button class="accent-dot" data-ac="emerald" style="background:#059669" title="Lục ngọc"></button>
+    <button class="accent-dot" data-ac="coral" style="background:#E24E28" title="Cam san hô"></button>
+    <button class="accent-dot" data-ac="violet" style="background:#7C3AED" title="Tím"></button>
+  </div>
+  <div class="pop-sep"></div>
+  <button class="pop-item" id="popToggleToolbar"><span>Ẩn / Hiện thanh công cụ</span><span class="kbd">Ctrl+T</span></button>
+  <button class="pop-item" id="popToggleSidebar"><span>Ẩn / Hiện thanh bên</span><span class="kbd">Ctrl+\</span></button>
+</div>
+
+<div class="popover" id="popHeading">
+  <button class="pop-item" data-fmt="h1"><strong>Tiêu đề 1</strong><span class="kbd">#</span></button>
+  <button class="pop-item" data-fmt="h2"><strong>Tiêu đề 2</strong><span class="kbd">##</span></button>
+  <button class="pop-item" data-fmt="h3"><strong>Tiêu đề 3</strong><span class="kbd">###</span></button>
+</div>
+
+<div class="popover" id="popMathTpl">
+  <div class="pop-label">Mẫu công thức thường dùng</div>
+  <button class="pop-item" data-snippet="$$\sigma_h = \frac{P \cdot D}{2 t}$$"><span>Ứng suất vòng (Barlow)</span></button>
+  <button class="pop-item" data-snippet="$$P_b = \frac{2 t \cdot S_{flow}}{D} \left[\frac{1 - 0.85(d/t)}{1 - 0.85(d/t)/M}\right]$$"><span>Áp suất nổ Modified B31G</span></button>
+  <button class="pop-item" data-snippet="$$CR = \frac{\Delta t}{\Delta T} \quad (\text{mm/năm})$$"><span>Tốc độ ăn mòn</span></button>
+</div>
+
+<div class="popover" id="popRecent">
+  <div class="pop-label">Tệp mở gần đây</div>
+  <button class="pop-item" data-open="0"><span>Bao-cao-An-mon-PM3.md</span><span class="kbd">Đang mở</span></button>
+  <button class="pop-item" data-open="1"><span>Test-Xuat-file_v0.6.md</span></button>
+  <button class="pop-item" data-open="2"><span>Ghi-chu-Kiem-dinh.md</span></button>
+</div>
+
+<div class="popover" id="popTabMenu">
+  <button class="pop-item" id="tmDuplicate"><span>Nhân bản tab</span></button>
+  <button class="pop-item" id="tmCopyName"><span>Sao chép tên tệp</span></button>
+  <div class="pop-sep"></div>
+  <button class="pop-item" id="tmCloseOthers"><span>Đóng các tab khác</span></button>
+  <button class="pop-item" id="tmCloseOne"><span>Đóng tab này</span><span class="kbd">Ctrl+W</span></button>
+</div>
+
+<!-- COMMAND PALETTE MODAL -->
+<div class="modal-backdrop" id="cmdBackdrop">
+  <div class="modal-box">
+    <input class="cmd-input" id="cmdInput" type="text" placeholder="Gõ lệnh tiếng Việt không dấu (vd: xuat word, sua font, toi, zen, wrap)…">
+    <div class="cmd-list" id="cmdList"></div>
+  </div>
+</div>
+
+<!-- FIXER DIFF MODAL -->
+<div class="modal-backdrop" id="fixerBackdrop">
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <h3>Sửa lỗi trình bày, font chữ &amp; công thức (Xem trước Trước → Sau)</h3>
+      <button class="mini-btn" id="btnCloseFixer">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fx-check"><input type="checkbox" id="fxMojibake" checked> <span>Sửa chữ vỡ mã UTF-8 (ví dụ: <strong>Viá»‡t Nam → Việt Nam</strong>)</span></label>
+      <label class="fx-check"><input type="checkbox" id="fxMath" checked> <span>Chuẩn hoá dấu công thức <code>\( … \)</code> → <code>$ … $</code> và bỏ khoảng trắng thừa</span></label>
+      <label class="fx-check"><input type="checkbox" id="fxHeading" checked> <span>Thêm dấu cách sau ký tự tiêu đề <code>#Tiêu đề → # Tiêu đề</code></span></label>
+      <label class="fx-check"><input type="checkbox" id="fxBullets" checked> <span>Đổi ký hiệu danh sách dán từ Word (<code>•</code>, <code>–</code>) sang <code>-</code> chuẩn Markdown</span></label>
+
+      <div class="diff-box" id="fixerDiffBox"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelFixer">Đóng</button>
+      <button class="btn primary" id="btnApplyFixer">Áp dụng cho tài liệu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DOCS_INIT = [
+  {
+    id: 1,
+    name: "Bao-cao-An-mon-PM3.md",
+    folder: "01_BAO_CAO",
+    dirty: false,
+    content: `# Đánh giá Toàn vẹn Đường ống Khí PM3 – Cà Mau
+
+Tài liệu mẫu mô phỏng quy trình đọc và soạn thảo trên **Markdown Tabs v0.7.0**. Bạn có thể chỉnh sửa trực tiếp bên trái, bật/tắt **Wrap**, đổi **Màu chủ đạo** hoặc bấm **Ctrl+K** để mở bảng lệnh nhanh.
+
+> [!NOTE]
+> Chế độ **Soft Wrap** đã bật mặc định: các đoạn văn kỹ thuật dài tự động xuống dòng gọn gàng trong khung Chia đôi mà không cần cuộn ngang.
+
+## 1. Thông số thiết kế & Công thức cơ bản
+
+Ứng suất vòng danh định của ống thép API 5L X65 được xác định theo công thức Barlow $ \\sigma_h = P D / (2t) $, với hệ số áp suất nổ theo tiêu chuẩn **ASME B31G sửa đổi**:
+
+$$P_b = \\frac{2 t \\cdot S_{flow}}{D} \\left[ \\frac{1 - 0.85(d/t)}{1 - 0.85(d/t)/M} \\right]$$
+
+> [!WARNING]
+> Khi nồng độ CO2 tăng vượt ngưỡng thiết kế và hệ thống tách nước gặp sự cố 21 ngày/năm, cần theo dõi sát chỉ số **ERF** tại vị trí khuyết tật sâu nhất.
+
+## 2. Bảng tổng hợp khuyết tật trọng yếu
+
+| Hạng mục | Giá trị | Đơn vị | Tiêu chuẩn |
+|---|---:|---|---|
+| Đường kính ngoài ($D$) | 457,2 | mm | API 5L X65 |
+| Chiều dày danh định ($t$) | 12,7 | mm | ASME B31.8 |
+| Chiều dày còn lại ($t_{rem}$) | 8,76 | mm | ILI 2024 |
+| Tốc độ ăn mòn ướt ($CR$) | 1,28 | mm/năm | ECE 5 |
+
+## 3. Đoạn mã kiểm toán nhanh
+
+\`\`\`python
+def barlow_hoop_stress(p_mpa, d_mm, t_mm):
+    """Tính ứng suất vòng (MPa) theo đường kính ngoài và chiều dày."""
+    return (p_mpa * d_mm) / (2.0 * t_mm)
+
+print(f"Sigma_h = {barlow_hoop_stress(10.2, 457.2, 12.7):.1f} MPa")
+\`\`\`
+
+## 4. Hình minh họa căn giữa tự động
+
+![Sơ đồ phân vùng độ bền đường ống theo DNV-RP-F101](diagram-placeholder)
+
+- Chú thích ảnh tự động lấy từ văn bản mô tả và đặt cân đối dưới khung hình.
+- Bấm nút **Sao chép** ở góc trên khối mã hoặc mở hộp thoại **Sửa lỗi** trên thanh công cụ để thử xem trước Trước → Sau.`
+  },
+  {
+    id: 2,
+    name: "Test-Xuat-file_v0.6.md",
+    folder: "mau-thu",
+    dirty: false,
+    content: `# Kiểm tra xuất file: hình, công thức, bảng
+
+Tệp này dùng để kiểm thử bộ xuất **Word (.docx)**, **HTML** và **PDF** trên giao diện mới.
+
+## 1. Kiểm thử lỗi font & công thức mẫu
+
+Đoạn văn cố tình chứa vài lỗi thường gặp khi dán từ Word (hãy bấm nút **Cây đũa phép** trên thanh công cụ để xem Diff Trước → Sau):
+
+• Chữ bị vỡ mã: Viá»‡t Nam có hệ thống ống dẫn khí biển.
+• Công thức kiểu cũ: \\( x^2 + y^2 = r^2 \\) và $ \\sigma_h $ có khoảng trắng thừa.
+
+## 2. Bảng căn lề và số liệu
+
+| Thông số | Ký hiệu | Giá trị | Ghi chú |
+|---|---|---:|---|
+| Áp suất vận hành | MAOP | 102 | barg |
+| Nhiệt độ đầu vào | $T_{in}$ | 50,0 | °C |
+| Hiệu suất ức chế | $\\eta$ | 99,0 | % |`
+  },
+  {
+    id: 3,
+    name: "Ghi-chu-Kiem-dinh.md",
+    folder: "01_BAO_CAO",
+    dirty: false,
+    content: `# Ghi chú Kiểm định Giao diện v0.7.0
+
+Danh sách các điểm cần kiểm chứng khi chạy thử bản mẫu tương tác này:
+
+## 1. Bố cục 2 tầng tinh gọn
+
+- Thanh đỉnh gộp Tab tài liệu, chuyển chế độ xem, Màu chủ đạo và Sáng/Tối.
+- Thử bấm nút **Tập trung (Zen)** ở góc trên cùng bên phải để cảm nhận không gian đọc tối đa.
+
+## 2. Điều hướng & Thao tác Tab
+
+- Chuyển qua lại giữa tab **Mục lục** và **Thư mục** ở thanh bên trái.
+- Chuột phải lên bất kỳ Tab nào ở trên để mở menu ngữ cảnh.
+- Cuộn khung Soạn thảo hoặc khung Xem trước để kiểm tra **Cuộn đồng bộ** và **Scroll-Spy** bên Mục lục.`
+  }
+];
+
+const state = {
+  docs: DOCS_INIT.map(d => ({ ...d })),
+  activeId: 1,
+  nextId: 4,
+  view: "preview",
+  theme: "light",
+  accent: "blue",
+  zen: false,
+  toolbarHidden: false,
+  sidebarOpen: true,
+  sidebarTab: "toc",
+  wrap: true,
+  syncScroll: true,
+  zoom: 1.0,
+  findOpen: false,
+  findCase: false,
+  findMatches: [],
+  findIndex: 0,
+  ctxTabId: null,
+  isSyncing: false,
+  sidebarWidth: 248,
+  splitRatio: 0.5
+};
+
+const $ = id => document.getElementById(id);
+
+function getActiveDoc() {
+  return state.docs.find(d => d.id === state.activeId) || state.docs[0];
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  $("sbToast").textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("sbToast").textContent = ""; }, 3200);
+}
+
+/* ---------- MARKDOWN RENDERER (SAFE, SELF-CONTAINED) ---------- */
+function escHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatMathPretty(expr) {
+  return escHtml(expr.trim())
+    .replace(/S_\{flow\}/g, "S_flow")
+    .replace(/t_\{rem\}/g, "t_rem")
+    .replace(/T_\{in\}/g, "T_in")
+    .replace(/\\text\{([^}]+)\}/g, "$1")
+    .replace(/\\sigma_h/g, "σₕ")
+    .replace(/\\sigma/g, "σ")
+    .replace(/\\eta/g, "η")
+    .replace(/\\Delta/g, "Δ")
+    .replace(/\\cdot/g, "·")
+    .replace(/\\left\[/g, "[")
+    .replace(/\\right\]/g, "]")
+    .replace(/\\quad/g, "   ")
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1) / ($2)");
+}
+
+function inlineMd(text) {
+  let s = escHtml(text);
+  s = s.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+  s = s.replace(/\$([^$\n]+)\$/g, (_, m) => `<span class="md-math-inline">${formatMathPretty(m)}</span>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  return s;
+}
+
+function renderMarkdown(md) {
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  let html = "";
+  const headings = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trim = line.trim();
+
+    if (!trim) { i++; continue; }
+
+    // Code fence
+    if (trim.startsWith("```")) {
+      const lang = trim.slice(3).trim() || "text";
+      let code = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        code.push(lines[i]);
+        i++;
+      }
+      i++;
+      const raw = code.join("\n");
+      html += `<div class="md-code-wrap"><div class="md-code-head"><span>${escHtml(lang)}</span><button class="copy-code-btn" data-copy="${encodeURIComponent(raw)}">Sao chép</button></div><pre>${escHtml(raw)}</pre></div>`;
+      continue;
+    }
+
+    // Display math $$ ... $$
+    if (trim.startsWith("$$")) {
+      let expr = trim.slice(2);
+      if (expr.endsWith("$$") && expr.length >= 2) {
+        expr = expr.slice(0, -2);
+        i++;
+      } else {
+        const buf = [expr];
+        i++;
+        while (i < lines.length && !lines[i].trim().endsWith("$$")) {
+          buf.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) {
+          buf.push(lines[i].trim().slice(0, -2));
+          i++;
+        }
+        expr = buf.join(" ");
+      }
+      html += `<div class="md-math-block">${formatMathPretty(expr)}</div>`;
+      continue;
+    }
+
+    // Headings
+    const hm = line.match(/^(#{1,3})\s+(.+)$/);
+    if (hm) {
+      const lvl = hm[1].length;
+      const title = hm[2].trim();
+      const hid = "h-" + headings.length;
+      headings.push({ id: hid, level: lvl, title, line: i + 1 });
+      html += `<h${lvl} id="${hid}">${inlineMd(title)}</h${lvl}>`;
+      i++;
+      continue;
+    }
+
+    // Image ![alt](src)
+    const im = trim.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (im) {
+      const alt = im[1] || "Hình minh họa kỹ thuật";
+      html += `<figure class="md-figure"><svg viewBox="0 0 420 120" width="380" style="max-width:100%;height:auto" role="img" aria-label="${escHtml(alt)}"><rect x="10" y="14" width="400" height="92" rx="8" fill="none" stroke="var(--border-strong)" stroke-dasharray="4,4"/><polyline points="40,86 125,68 210,54 295,42 380,28" fill="none" stroke="var(--accent)" stroke-width="2.5"/><circle cx="125" cy="68" r="4" fill="var(--accent)"/><circle cx="210" cy="54" r="4" fill="var(--accent)"/><circle cx="295" cy="42" r="4" fill="var(--amber)"/><text x="210" y="100" text-anchor="middle" fill="var(--ink-3)" font-size="11" font-family="Inter,sans-serif">Đồ thị minh họa (tự động căn giữa trong trang đọc)</text></svg><figcaption>${escHtml(alt)}</figcaption></figure>`;
+      i++;
+      continue;
+    }
+
+    // Callout or Blockquote
+    if (trim.startsWith(">")) {
+      const qLines = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        qLines.push(lines[i].trim().replace(/^>\s?/, ""));
+        i++;
+      }
+      const first = qLines[0] || "";
+      if (first.startsWith("[!NOTE]") || first.startsWith("[!WARNING]")) {
+        const isWarn = first.startsWith("[!WARNING]");
+        const body = qLines.slice(1).join(" ");
+        html += `<div class="md-callout ${isWarn ? "warn" : ""}"><div class="md-callout-title">${isWarn ? "Cảnh báo kỹ thuật" : "Ghi chú"}</div><div>${inlineMd(body)}</div></div>`;
+      } else {
+        html += `<blockquote class="md-quote">${inlineMd(qLines.join(" "))}</blockquote>`;
+      }
+      continue;
+    }
+
+    // Table
+    if (trim.startsWith("|") && i + 1 < lines.length && lines[i + 1].trim().startsWith("|") && lines[i + 1].includes("---")) {
+      const headCells = trim.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      const alignSpec = lines[i + 1].replace(/^\||\|$/g, "").split("|").map(c => {
+        const t = c.trim();
+        if (t.startsWith(":") && t.endsWith(":")) return "center";
+        if (t.endsWith(":")) return "right";
+        return "left";
+      });
+      i += 2;
+      let rowsHtml = "";
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = lines[i].trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+        rowsHtml += "<tr>" + cells.map((c, idx) => `<td style="text-align:${alignSpec[idx] || "left"}">${inlineMd(c)}</td>`).join("") + "</tr>";
+        i++;
+      }
+      const thHtml = headCells.map((c, idx) => `<th style="text-align:${alignSpec[idx] || "left"}">${inlineMd(c)}</th>`).join("");
+      html += `<div class="md-table-wrap"><table class="md-table"><thead><tr>${thHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+      continue;
+    }
+
+    // Bullet list
+    if (/^[-*•]\s+/.test(trim)) {
+      let items = "";
+      while (i < lines.length && /^[-*•]\s+/.test(lines[i].trim())) {
+        items += `<li>${inlineMd(lines[i].trim().replace(/^[-*•]\s+/, ""))}</li>`;
+        i++;
+      }
+      html += `<ul>${items}</ul>`;
+      continue;
+    }
+
+    // Paragraph
+    const pLines = [];
+    while (i < lines.length && lines[i].trim() && !lines[i].trim().startsWith("#") && !lines[i].trim().startsWith("```") && !lines[i].trim().startsWith(">") && !lines[i].trim().startsWith("|") && !lines[i].trim().startsWith("$$") && !/^[-*•]\s+/.test(lines[i].trim()) && !/^!\[/.test(lines[i].trim())) {
+      pLines.push(lines[i].trim());
+      i++;
+    }
+    html += `<p>${inlineMd(pLines.join(" "))}</p>`;
+  }
+
+  return { html, headings };
+}
+
+/* ---------- RENDER FUNCTIONS ---------- */
+let currentHeadings = [];
+
+function renderTabs() {
+  const strip = $("tabsStrip");
+  strip.innerHTML = state.docs.map(doc => {
+    const active = doc.id === state.activeId ? "active" : "";
+    const dirty = doc.dirty ? "dirty" : "";
+    return `<div class="doc-tab ${active} ${dirty}" data-tab-id="${doc.id}" title="${escHtml(doc.folder + "/" + doc.name)}">
+      <svg class="doc-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      <span class="doc-tab-dirty" title="Chưa lưu"></span>
+      <span class="doc-tab-title">${escHtml(doc.name)}</span>
+      <button class="doc-tab-close" data-close-id="${doc.id}" title="Đóng tab">×</button>
+    </div>`;
+  }).join("");
+}
+
+function renderSidebar() {
+  const wrap = $("sbContent");
+  $("sbSearchWrap").style.display = state.sidebarTab === "toc" ? "block" : "none";
+
+  if (state.sidebarTab === "toc") {
+    const q = $("tocFilter").value.trim().toLowerCase();
+    const list = currentHeadings.filter(h => !q || h.title.toLowerCase().includes(q));
+    if (!list.length) {
+      wrap.innerHTML = `<div style="padding:12px 8px;color:var(--ink-3);font-size:12.5px">Không có tiêu đề phù hợp.</div>`;
+      return;
+    }
+    wrap.innerHTML = list.map((h, idx) => `
+      <button class="toc-item l${h.level} ${idx === 0 ? "active" : ""}" data-hid="${h.id}" data-line="${h.line}" title="${escHtml(h.title)}">
+        <span class="toc-text">${escHtml(h.title)}</span>
+      </button>
+    `).join("");
+  } else {
+    const groups = {};
+    state.docs.forEach(d => {
+      if (!groups[d.folder]) groups[d.folder] = [];
+      groups[d.folder].push(d);
+    });
+    let html = "";
+    Object.keys(groups).forEach(folder => {
+      html += `<div class="tree-folder">📁 ${escHtml(folder)}</div>`;
+      groups[folder].forEach(d => {
+        html += `<button class="tree-file ${d.id === state.activeId ? "active" : ""}" data-tree-id="${d.id}">📄 ${escHtml(d.name)}</button>`;
+      });
+    });
+    wrap.innerHTML = html;
+  }
+}
+
+function updateGutter() {
+  const ta = $("editorInput");
+  const lines = ta.value.split("\n").length;
+  const pos = ta.selectionStart || 0;
+  const curLine = ta.value.slice(0, pos).split("\n").length;
+  const col = pos - ta.value.lastIndexOf("\n", pos - 1);
+  let out = "";
+  for (let i = 1; i <= lines; i++) {
+    out += i === curLine ? `<div class="cur-ln">${i}</div>` : `<div>${i}</div>`;
+  }
+  $("editorGutter").innerHTML = out;
+  $("sbCursor").textContent = `Dòng ${curLine}, Cột ${col}`;
+}
+
+function renderDocument() {
+  const doc = getActiveDoc();
+  if (!doc) return;
+  const ta = $("editorInput");
+  if (ta.value !== doc.content) {
+    ta.value = doc.content;
+  }
+  const { html, headings } = renderMarkdown(doc.content);
+  currentHeadings = headings;
+  $("previewContent").innerHTML = html;
+  renderSidebar();
+  updateGutter();
+  updateStatusBar();
+  if (state.findOpen) runFind();
+}
+
+function updateStatusBar() {
+  const doc = getActiveDoc();
+  if (!doc) return;
+  const badge = $("saveBadge");
+  if (doc.dirty) {
+    badge.className = "save-badge dirty";
+    badge.textContent = "● Chưa lưu";
+  } else {
+    badge.className = "save-badge saved";
+    badge.textContent = "● Đã lưu";
+  }
+  $("sbFileName").textContent = doc.name;
+  const words = doc.content.trim() ? doc.content.trim().split(/\s+/).length : 0;
+  $("sbWords").textContent = `${words} từ`;
+  $("btnZoomReset").textContent = `${Math.round(state.zoom * 100)}%`;
+  $("previewContent").style.setProperty("--zoom", state.zoom);
+}
+
+function setView(mode) {
+  state.view = mode;
+  $("panes").dataset.view = mode;
+  document.querySelectorAll("#viewSwitcher .seg-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+}
+
+function toggleTheme() {
+  state.theme = state.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = state.theme;
+  $("themeIcon").innerHTML = state.theme === "dark"
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+    : '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>';
+  showToast(state.theme === "dark" ? "Đã chuyển sang chế độ Tối" : "Đã chuyển sang chế độ Sáng");
+}
+
+function setAccent(ac) {
+  state.accent = ac;
+  document.documentElement.dataset.accent = ac;
+  document.querySelectorAll(".accent-dot").forEach(d => d.classList.toggle("active", d.dataset.ac === ac));
+  const names = { blue: "Xanh dương", emerald: "Lục ngọc", coral: "Cam san hô", violet: "Tím" };
+  showToast(`Màu chủ đạo: ${names[ac]}`);
+}
+
+function toggleZen() {
+  state.zen = !state.zen;
+  $("appShell").classList.toggle("zen", state.zen);
+  $("btnZen").classList.toggle("active", state.zen);
+  showToast(state.zen ? "Chế độ Tập trung (bấm lại để thoát)" : "Đã thoát chế độ Tập trung");
+}
+
+function applyFormat(kind) {
+  if (state.view === "preview") setView("split");
+  const ta = $("editorInput");
+  const doc = getActiveDoc();
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const sel = ta.value.slice(s, e);
+  let insert = "";
+  if (kind === "bold") insert = `**${sel || "chữ đậm"}**`;
+  else if (kind === "italic") insert = `*${sel || "chữ nghiêng"}*`;
+  else if (kind === "code") insert = `\`${sel || "mã"}\``;
+  else if (kind === "h1") insert = `\n# ${sel || "Tiêu đề 1"}\n`;
+  else if (kind === "h2") insert = `\n## ${sel || "Tiêu đề 2"}\n`;
+  else if (kind === "h3") insert = `\n### ${sel || "Tiêu đề 3"}\n`;
+  else if (kind === "list") insert = `\n- ${sel || "Mục danh sách"}\n`;
+  else if (kind === "callout") insert = `\n> [!NOTE]\n> ${sel || "Nội dung lưu ý kỹ thuật quan trọng."}\n`;
+  else if (kind === "table") insert = `\n| Hạng mục | Giá trị | Đơn vị |\n|---|---:|---|\n| Thông số 1 | 100 | MPa |\n`;
+  else if (kind === "math-inline") insert = `$${sel || "x^2"}$`;
+  else if (kind === "math-block") insert = `\n$$\n${sel || "E = mc^2"}\n$$\n`;
+  else insert = kind;
+
+  doc.content = ta.value.slice(0, s) + insert + ta.value.slice(e);
+  doc.dirty = true;
+  ta.value = doc.content;
+  ta.focus();
+  ta.setSelectionRange(s + insert.length, s + insert.length);
+  renderTabs();
+  renderDocument();
+}
+
+/* ---------- FIND & REPLACE ---------- */
+function runFind() {
+  const q = $("findInput").value;
+  const text = getActiveDoc().content;
+  state.findMatches = [];
+  if (q) {
+    const hay = state.findCase ? text : text.toLowerCase();
+    const needle = state.findCase ? q : q.toLowerCase();
+    let idx = 0;
+    while ((idx = hay.indexOf(needle, idx)) !== -1) {
+      state.findMatches.push([idx, idx + q.length]);
+      idx += q.length || 1;
+    }
+  }
+  if (state.findIndex >= state.findMatches.length) state.findIndex = 0;
+  const total = state.findMatches.length;
+  $("findCount").textContent = total ? `${state.findIndex + 1}/${total}` : "0/0";
+}
+
+function jumpFind(delta) {
+  runFind();
+  if (!state.findMatches.length) return;
+  state.findIndex = (state.findIndex + delta + state.findMatches.length) % state.findMatches.length;
+  const [a, b] = state.findMatches[state.findIndex];
+  const ta = $("editorInput");
+  if (state.view === "preview") setView("split");
+  ta.focus();
+  ta.setSelectionRange(a, b);
+  updateGutter();
+  $("findCount").textContent = `${state.findIndex + 1}/${state.findMatches.length}`;
+}
+
+/* ---------- FIXER DIFF PREVIEW ---------- */
+function computeFixed(text) {
+  let out = text;
+  const changes = [];
+  if ($("fxMojibake").checked && out.includes("Viá»‡t")) {
+    out = out.replace(/Viá»‡t/g, "Việt");
+    changes.push({ del: "Viá»‡t Nam", add: "Việt Nam" });
+  }
+  if ($("fxMath").checked) {
+    if (/\\\(.*?\\\)/.test(out)) {
+      out = out.replace(/\\\(\s*([^)]+?)\s*\\\)/g, "$$$1$");
+      changes.push({ del: "\\( x^2 + y^2 = r^2 \\)", add: "$x^2 + y^2 = r^2$" });
+    }
+    if (/\$\s+([^$\n]+?)\s+\$/.test(out)) {
+      out = out.replace(/\$\s+([^$\n]+?)\s+\$/g, "$$$1$");
+      changes.push({ del: "$ \\sigma_h $", add: "$\\sigma_h$" });
+    }
+  }
+  if ($("fxHeading").checked && /^#+[^#\s]/m.test(out)) {
+    out = out.replace(/^(#+)([^#\s])/gm, "$1 $2");
+    changes.push({ del: "#Tiêu đề", add: "# Tiêu đề" });
+  }
+  if ($("fxBullets").checked && /^•\s+/m.test(out)) {
+    out = out.replace(/^•\s+/gm, "- ");
+    changes.push({ del: "• Mục danh sách", add: "- Mục danh sách" });
+  }
+  return { out, changes };
+}
+
+function renderFixerDiff() {
+  const { changes } = computeFixed(getActiveDoc().content);
+  const box = $("fixerDiffBox");
+  if (!changes.length) {
+    box.innerHTML = `<span style="color:var(--ok)">✓ Không phát hiện lỗi nào trong tài liệu hiện tại (thử chuyển sang tab Test-Xuat-file_v0.6.md để xem mẫu sửa lỗi!).</span>`;
+    $("btnApplyFixer").disabled = true;
+  } else {
+    $("btnApplyFixer").disabled = false;
+    box.innerHTML = changes.map(c => `<span class="diff-del">- ${escHtml(c.del)}</span><span class="diff-add">+ ${escHtml(c.add)}</span>`).join("");
+  }
+}
+
+/* ---------- COMMAND PALETTE ---------- */
+function triggerDownload(filename, content, mime) {
+  try {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (_) {}
+}
+
+function baseName() {
+  const doc = getActiveDoc();
+  return (doc ? doc.name : "Tai-lieu").replace(/\.md$/i, "");
+}
+
+function buildStandaloneHtml(title, bodyHtml) {
+  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>${escHtml(title)}</title><style>body{font-family:Inter,Segoe UI,sans-serif;max-width:820px;margin:32px auto;padding:0 20px;line-height:1.7;color:#0F172A}h1,h2{border-bottom:1px solid #CBD5E1;padding-bottom:6px}table{border-collapse:collapse;width:100%;margin:14px 0}th,td{border:1px solid #CBD5E1;padding:8px 10px}th{background:#F1F5F9}pre{background:#F6F8FA;padding:12px;border-radius:8px;overflow:auto}.md-callout{border-left:4px solid #2563EB;background:#EFF6FF;padding:10px 14px;border-radius:6px;margin:12px 0}.md-math-block{text-align:center;font-family:Cambria Math,Georgia,serif;font-style:italic;padding:12px;background:#F8FAFC;border-radius:6px;margin:14px 0}</style></head><body>${bodyHtml}</body></html>`;
+}
+
+function doExportWord() {
+  const name = baseName() + ".doc";
+  const bodyHtml = $("previewContent").innerHTML;
+  triggerDownload(name, "\ufeff" + buildStandaloneHtml(baseName(), bodyHtml), "application/msword;charset=utf-8");
+  showToast(`Đã xuất Word: ${baseName()}.docx (mẫu tải về ${name})`);
+}
+
+function doExportPdf() {
+  showToast(`Mở hộp thoại Lưu thành PDF cho ${baseName()}.pdf…`);
+  try { window.print(); } catch (_) {}
+}
+
+function doExportMd() {
+  const doc = getActiveDoc();
+  const name = baseName() + ".md";
+  triggerDownload(name, doc.content, "text/markdown;charset=utf-8");
+  showToast(`Đã xuất tệp Markdown: ${name}`);
+}
+
+function doExportHtml() {
+  const name = baseName() + ".html";
+  const bodyHtml = $("previewContent").innerHTML;
+  triggerDownload(name, buildStandaloneHtml(baseName(), bodyHtml), "text/html;charset=utf-8");
+  showToast(`Đã xuất HTML độc lập: ${name}`);
+}
+
+function doPrint() {
+  showToast(`Đang chuẩn bị in tài liệu ${baseName()}…`);
+  try { window.print(); } catch (_) {}
+}
+
+const COMMANDS = [
+  { label: "Xuất Word (.docx) chuẩn OMML", keys: "xuat word docx", kbd: "", run: doExportWord },
+  { label: "Xuất PDF (.pdf)", keys: "xuat pdf", kbd: "", run: doExportPdf },
+  { label: "Xuất Markdown (.md)", keys: "xuat md markdown", kbd: "", run: doExportMd },
+  { label: "Xuất HTML (.html) độc lập", keys: "xuat html", kbd: "", run: doExportHtml },
+  { label: "In tài liệu (Print)", keys: "in print", kbd: "Ctrl+P", run: doPrint },
+  { label: "Mở Sửa lỗi font & trình bày (Trước → Sau)", keys: "sua loi font tcvn3 vni mathtype", kbd: "Ctrl+Shift+F", run: openFixer },
+  { label: "Chuyển giao diện Sáng / Tối", keys: "sang toi dark light theme", kbd: "", run: toggleTheme },
+  { label: "Bật / Tắt chế độ Tập trung (Zen)", keys: "zen tap trung toan man hinh", kbd: "", run: toggleZen },
+  { label: "Chế độ xem: Chia đôi", keys: "chia doi split", kbd: "Ctrl+3", run: () => setView("split") },
+  { label: "Chế độ xem: Chỉ xem trước", keys: "xem truoc preview", kbd: "Ctrl+2", run: () => setView("preview") },
+  { label: "Chế độ xem: Chỉ soạn thảo", keys: "soan thao edit", kbd: "Ctrl+1", run: () => setView("edit") },
+  { label: "Bật / Tắt xuống dòng mềm (Soft Wrap)", keys: "wrap xuong dong mem", kbd: "", run: () => $("btnToggleWrap").click() },
+  { label: "Tìm & Thay thế nổi", keys: "tim thay the find replace", kbd: "Ctrl+F", run: openFind },
+  { label: "Tạo tab tài liệu mới", keys: "moi new tab", kbd: "Ctrl+N", run: createNewTab },
+  { label: "Lưu tài liệu hiện tại", keys: "luu save", kbd: "Ctrl+S", run: saveActiveDoc }
+];
+
+function renderCmdList() {
+  const q = $("cmdInput").value.trim().toLowerCase();
+  const items = COMMANDS.filter(c => !q || c.label.toLowerCase().includes(q) || c.keys.includes(q));
+  $("cmdList").innerHTML = items.map((c, idx) => `
+    <button class="cmd-item ${idx === 0 ? "selected" : ""}" data-cmd-idx="${COMMANDS.indexOf(c)}">
+      <span>${escHtml(c.label)}</span>
+      ${c.kbd ? `<span class="kbd">${c.kbd}</span>` : ""}
+    </button>
+  `).join("") || `<div style="padding:12px;color:var(--ink-3);font-size:13px">Không tìm thấy lệnh phù hợp.</div>`;
+}
+
+function openCmdPalette() {
+  closeAllPopovers();
+  $("cmdBackdrop").classList.add("open");
+  $("cmdInput").value = "";
+  renderCmdList();
+  $("cmdInput").focus();
+}
+
+function openFixer() {
+  closeAllPopovers();
+  $("fixerBackdrop").classList.add("open");
+  renderFixerDiff();
+}
+
+function openFind() {
+  if (state.view === "preview") setView("split");
+  state.findOpen = true;
+  $("findFloat").classList.add("open");
+  $("findInput").focus();
+  runFind();
+}
+
+function saveActiveDoc() {
+  const doc = getActiveDoc();
+  if (!doc) return;
+  doc.dirty = false;
+  renderTabs();
+  updateStatusBar();
+  showToast(`Đã lưu: ${doc.name}`);
+}
+
+function createNewTab() {
+  const id = state.nextId++;
+  state.docs.push({
+    id,
+    name: `Tai-lieu-moi-${id}.md`,
+    folder: "01_BAO_CAO",
+    dirty: true,
+    content: `# Tài liệu mới ${id}\n\nBắt đầu soạn thảo tại đây. Thử dùng thanh công cụ hoặc bấm **Ctrl+K**.\n`
+  });
+  state.activeId = id;
+  if (state.view === "preview") setView("split");
+  renderTabs();
+  renderDocument();
+  $("editorInput").focus();
+}
+
+function closeTab(id) {
+  if (state.docs.length <= 1) {
+    showToast("Cần giữ lại ít nhất 1 tab đang mở.");
+    return;
+  }
+  const idx = state.docs.findIndex(d => d.id === id);
+  state.docs = state.docs.filter(d => d.id !== id);
+  if (state.activeId === id) {
+    state.activeId = state.docs[Math.max(0, idx - 1)].id;
+  }
+  renderTabs();
+  renderDocument();
+}
+
+/* ---------- POPOVER HELPER ---------- */
+function closeAllPopovers() {
+  document.querySelectorAll(".popover").forEach(p => p.classList.remove("open"));
+}
+
+function togglePopover(popId, anchorEl, x, y) {
+  const pop = $(popId);
+  const wasOpen = pop.classList.contains("open");
+  closeAllPopovers();
+  if (wasOpen) return;
+  pop.classList.add("open");
+  if (anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    const pw = pop.offsetWidth || 190;
+    const left = Math.min(window.innerWidth - pw - 8, Math.max(8, r.left));
+    pop.style.left = left + "px";
+    pop.style.top = (r.bottom + 5) + "px";
+  } else {
+    pop.style.left = Math.min(window.innerWidth - 200, x) + "px";
+    pop.style.top = Math.min(window.innerHeight - 160, y) + "px";
+  }
+}
+
+/* ---------- EVENTS ---------- */
+$("tabsStrip").addEventListener("click", e => {
+  const closeBtn = e.target.closest("[data-close-id]");
+  if (closeBtn) { e.stopPropagation(); closeTab(Number(closeBtn.dataset.closeId)); return; }
+  const tab = e.target.closest("[data-tab-id]");
+  if (tab) {
+    state.activeId = Number(tab.dataset.tabId);
+    renderTabs();
+    renderDocument();
+  }
+});
+
+$("tabsStrip").addEventListener("auxclick", e => {
+  if (e.button === 1) {
+    const tab = e.target.closest("[data-tab-id]");
+    if (tab) { e.preventDefault(); closeTab(Number(tab.dataset.tabId)); }
+  }
+});
+
+$("tabsStrip").addEventListener("contextmenu", e => {
+  const tab = e.target.closest("[data-tab-id]");
+  if (!tab) return;
+  e.preventDefault();
+  state.ctxTabId = Number(tab.dataset.tabId);
+  togglePopover("popTabMenu", null, e.clientX, e.clientY);
+});
+
+$("btnNewTab").addEventListener("click", createNewTab);
+$("btnToggleSidebar").addEventListener("click", () => {
+  state.sidebarOpen = !state.sidebarOpen;
+  $("sidebar").classList.toggle("hidden", !state.sidebarOpen);
+});
+
+$("viewSwitcher").addEventListener("click", e => {
+  const btn = e.target.closest(".seg-btn");
+  if (btn) setView(btn.dataset.mode);
+});
+
+$("btnTheme").addEventListener("click", toggleTheme);
+$("btnZen").addEventListener("click", toggleZen);
+$("btnCmdPalette").addEventListener("click", openCmdPalette);
+
+$("btnAccentPop").addEventListener("click", e => { e.stopPropagation(); togglePopover("popAccent", $("btnAccentPop")); });
+$("tbHeading").addEventListener("click", e => { e.stopPropagation(); togglePopover("popHeading", $("tbHeading")); });
+$("tbMathTpl").addEventListener("click", e => { e.stopPropagation(); togglePopover("popMathTpl", $("tbMathTpl")); });
+$("tbRecent").addEventListener("click", e => { e.stopPropagation(); togglePopover("popRecent", $("tbRecent")); });
+
+document.querySelectorAll(".accent-dot").forEach(d => d.addEventListener("click", () => { setAccent(d.dataset.ac); closeAllPopovers(); }));
+$("popToggleToolbar").addEventListener("click", () => {
+  state.toolbarHidden = !state.toolbarHidden;
+  $("appShell").classList.toggle("toolbar-hidden", state.toolbarHidden);
+  closeAllPopovers();
+});
+$("popToggleSidebar").addEventListener("click", () => { $("btnToggleSidebar").click(); closeAllPopovers(); });
+
+document.querySelectorAll("[data-fmt]").forEach(btn => btn.addEventListener("click", () => {
+  applyFormat(btn.dataset.fmt);
+  closeAllPopovers();
+}));
+document.querySelectorAll("[data-snippet]").forEach(btn => btn.addEventListener("click", () => {
+  applyFormat("\n" + btn.dataset.snippet + "\n");
+  closeAllPopovers();
+}));
+document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => {
+  const idx = Number(btn.dataset.open);
+  if (state.docs[idx]) {
+    state.activeId = state.docs[idx].id;
+    renderTabs();
+    renderDocument();
+  }
+  closeAllPopovers();
+}));
+
+$("tbSave").addEventListener("click", saveActiveDoc);
+$("tbFind").addEventListener("click", () => state.findOpen ? ($("btnFindClose").click()) : openFind());
+$("tbFixer").addEventListener("click", openFixer);
+$("tbExportDocx").addEventListener("click", doExportWord);
+$("tbExportPdf").addEventListener("click", doExportPdf);
+$("tbExportMd").addEventListener("click", doExportMd);
+$("tbExportHtml").addEventListener("click", doExportHtml);
+$("tbPrint").addEventListener("click", doPrint);
+
+// Tab context menu actions
+$("tmDuplicate").addEventListener("click", () => {
+  const src = state.docs.find(d => d.id === state.ctxTabId);
+  if (src) {
+    const id = state.nextId++;
+    state.docs.push({ id, name: src.name.replace(".md", "-ban-sao.md"), folder: src.folder, dirty: true, content: src.content });
+    state.activeId = id;
+    renderTabs();
+    renderDocument();
+  }
+  closeAllPopovers();
+});
+$("tmCopyName").addEventListener("click", () => {
+  const src = state.docs.find(d => d.id === state.ctxTabId);
+  if (src) showToast(`Đã sao chép: ${src.name}`);
+  closeAllPopovers();
+});
+$("tmCloseOthers").addEventListener("click", () => {
+  if (state.ctxTabId) {
+    state.docs = state.docs.filter(d => d.id === state.ctxTabId);
+    state.activeId = state.ctxTabId;
+    renderTabs();
+    renderDocument();
+  }
+  closeAllPopovers();
+});
+$("tmCloseOne").addEventListener("click", () => { if (state.ctxTabId) closeTab(state.ctxTabId); closeAllPopovers(); });
+
+// Sidebar tabs & clicks
+document.querySelectorAll(".sb-tab").forEach(t => t.addEventListener("click", () => {
+  state.sidebarTab = t.dataset.sb;
+  document.querySelectorAll(".sb-tab").forEach(x => x.classList.toggle("active", x === t));
+  renderSidebar();
+}));
+$("tocFilter").addEventListener("input", renderSidebar);
+$("sbContent").addEventListener("click", e => {
+  const toc = e.target.closest("[data-hid]");
+  if (toc) {
+    const el = document.getElementById(toc.dataset.hid);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.querySelectorAll(".toc-item").forEach(x => x.classList.toggle("active", x === toc));
+    return;
+  }
+  const tree = e.target.closest("[data-tree-id]");
+  if (tree) {
+    state.activeId = Number(tree.dataset.treeId);
+    renderTabs();
+    renderDocument();
+  }
+});
+
+// Editor input + scroll sync
+$("editorInput").addEventListener("input", e => {
+  const doc = getActiveDoc();
+  doc.content = e.target.value;
+  doc.dirty = true;
+  renderTabs();
+  renderDocument();
+});
+$("editorInput").addEventListener("keyup", updateGutter);
+$("editorInput").addEventListener("click", updateGutter);
+
+$("editorScroll").addEventListener("scroll", () => {
+  $("editorGutter").scrollTop = $("editorScroll").scrollTop;
+  if (!state.syncScroll || state.isSyncing) return;
+  const es = $("editorScroll"), pp = $("previewPane");
+  const maxE = es.scrollHeight - es.clientHeight;
+  if (maxE <= 0) return;
+  state.isSyncing = true;
+  pp.scrollTop = (es.scrollTop / maxE) * (pp.scrollHeight - pp.clientHeight);
+  setTimeout(() => { state.isSyncing = false; }, 30);
+});
+
+// Preview Scroll-Spy & Copy code button
+$("previewPane").addEventListener("scroll", () => {
+  const pp = $("previewPane");
+  // Scroll-Spy
+  let activeHid = currentHeadings[0]?.id;
+  const topEdge = pp.getBoundingClientRect().top + 80;
+  for (const h of currentHeadings) {
+    const el = document.getElementById(h.id);
+    if (el && el.getBoundingClientRect().top <= topEdge) activeHid = h.id;
+  }
+  if (activeHid) {
+    document.querySelectorAll(".toc-item").forEach(x => x.classList.toggle("active", x.dataset.hid === activeHid));
+  }
+  if (!state.syncScroll || state.isSyncing) return;
+  const maxP = pp.scrollHeight - pp.clientHeight;
+  if (maxP <= 0) return;
+  state.isSyncing = true;
+  const es = $("editorScroll");
+  es.scrollTop = (pp.scrollTop / maxP) * (es.scrollHeight - es.clientHeight);
+  setTimeout(() => { state.isSyncing = false; }, 30);
+});
+
+$("previewContent").addEventListener("click", e => {
+  const btn = e.target.closest(".copy-code-btn");
+  if (!btn) return;
+  const raw = decodeURIComponent(btn.dataset.copy || "");
+  try {
+    if (navigator.clipboard) navigator.clipboard.writeText(raw);
+  } catch (_) {}
+  btn.textContent = "Đã chép ✓";
+  showToast("Đã sao chép khối mã vào clipboard");
+  setTimeout(() => { btn.textContent = "Sao chép"; }, 1800);
+});
+
+// Status bar toggles
+$("btnToggleWrap").addEventListener("click", () => {
+  state.wrap = !state.wrap;
+  $("editorInput").classList.toggle("nowrap", !state.wrap);
+  $("btnToggleWrap").classList.toggle("on", state.wrap);
+  $("btnToggleWrap").textContent = state.wrap ? "Wrap: Bật" : "Wrap: Tắt";
+});
+$("btnToggleSync").addEventListener("click", () => {
+  state.syncScroll = !state.syncScroll;
+  $("btnToggleSync").classList.toggle("on", state.syncScroll);
+  showToast(state.syncScroll ? "Đã bật cuộn đồng bộ" : "Đã tắt cuộn đồng bộ");
+});
+$("btnZoomIn").addEventListener("click", () => { state.zoom = Math.min(1.5, +(state.zoom + 0.1).toFixed(1)); updateStatusBar(); });
+$("btnZoomOut").addEventListener("click", () => { state.zoom = Math.max(0.7, +(state.zoom - 0.1).toFixed(1)); updateStatusBar(); });
+$("btnZoomReset").addEventListener("click", () => { state.zoom = 1.0; updateStatusBar(); });
+
+// Find bar events
+$("findInput").addEventListener("input", runFind);
+$("btnFindNext").addEventListener("click", () => jumpFind(1));
+$("btnFindPrev").addEventListener("click", () => jumpFind(-1));
+$("btnFindCase").addEventListener("click", () => {
+  state.findCase = !state.findCase;
+  $("btnFindCase").classList.toggle("active", state.findCase);
+  runFind();
+});
+$("btnFindClose").addEventListener("click", () => { state.findOpen = false; $("findFloat").classList.remove("open"); });
+$("btnReplaceOne").addEventListener("click", () => {
+  runFind();
+  if (!state.findMatches.length) return;
+  const [a, b] = state.findMatches[state.findIndex];
+  const rep = $("replaceInput").value;
+  const doc = getActiveDoc();
+  doc.content = doc.content.slice(0, a) + rep + doc.content.slice(b);
+  doc.dirty = true;
+  renderTabs();
+  renderDocument();
+  showToast("Đã thay thế 1 vị trí");
+});
+$("btnReplaceAll").addEventListener("click", () => {
+  const q = $("findInput").value;
+  if (!q) return;
+  const rep = $("replaceInput").value;
+  const doc = getActiveDoc();
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), state.findCase ? "g" : "gi");
+  const count = (doc.content.match(re) || []).length;
+  doc.content = doc.content.replace(re, rep);
+  doc.dirty = true;
+  renderTabs();
+  renderDocument();
+  showToast(`Đã thay thế ${count} vị trí`);
+});
+
+// Command Palette events
+$("cmdInput").addEventListener("input", renderCmdList);
+$("cmdList").addEventListener("click", e => {
+  const item = e.target.closest("[data-cmd-idx]");
+  if (!item) return;
+  $("cmdBackdrop").classList.remove("open");
+  COMMANDS[Number(item.dataset.cmdIdx)].run();
+});
+$("cmdBackdrop").addEventListener("click", e => { if (e.target === $("cmdBackdrop")) $("cmdBackdrop").classList.remove("open"); });
+
+// Fixer modal events
+["fxMojibake", "fxMath", "fxHeading", "fxBullets"].forEach(id => $(id).addEventListener("change", renderFixerDiff));
+$("btnCloseFixer").addEventListener("click", () => $("fixerBackdrop").classList.remove("open"));
+$("btnCancelFixer").addEventListener("click", () => $("fixerBackdrop").classList.remove("open"));
+$("fixerBackdrop").addEventListener("click", e => { if (e.target === $("fixerBackdrop")) $("fixerBackdrop").classList.remove("open"); });
+$("btnApplyFixer").addEventListener("click", () => {
+  const doc = getActiveDoc();
+  const { out, changes } = computeFixed(doc.content);
+  if (changes.length) {
+    doc.content = out;
+    doc.dirty = true;
+    renderTabs();
+    renderDocument();
+    showToast(`Đã tự động sửa ${changes.length} nhóm lỗi trình bày!`);
+  }
+  $("fixerBackdrop").classList.remove("open");
+});
+
+// Global shortcuts & click-outside popovers
+document.addEventListener("click", e => {
+  if (!e.target.closest(".popover") && !e.target.closest(".icon-btn")) closeAllPopovers();
+});
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key.toLowerCase() === "k") { e.preventDefault(); openCmdPalette(); }
+  else if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); openFind(); }
+  else if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); saveActiveDoc(); }
+  else if (e.ctrlKey && e.key.toLowerCase() === "p") { e.preventDefault(); doPrint(); }
+  else if (e.ctrlKey && e.key === "1") { e.preventDefault(); setView("edit"); }
+  else if (e.ctrlKey && e.key === "2") { e.preventDefault(); setView("preview"); }
+  else if (e.ctrlKey && e.key === "3") { e.preventDefault(); setView("split"); }
+  else if (e.key === "Escape") {
+    closeAllPopovers();
+    $("cmdBackdrop").classList.remove("open");
+    $("fixerBackdrop").classList.remove("open");
+    if (state.findOpen) $("btnFindClose").click();
+  }
+});
+
+/* ---------- DRAG RESIZERS (SIDEBAR & SPLIT PANES) ---------- */
+function applyPaneSizes() {
+  $("sidebar").style.width = state.sidebarWidth + "px";
+  const ep = document.querySelector(".editor-pane");
+  if (state.view === "split") {
+    ep.style.flex = `0 0 ${(state.splitRatio * 100).toFixed(2)}%`;
+  } else {
+    ep.style.flex = "";
+  }
+}
+
+(function initResizers() {
+  const rsSide = $("resizerSidebar");
+  let dragSide = false;
+  let startX = 0;
+  let startW = 248;
+
+  rsSide.addEventListener("pointerdown", e => {
+    dragSide = true;
+    startX = e.clientX;
+    startW = $("sidebar").getBoundingClientRect().width;
+    rsSide.classList.add("dragging");
+    document.body.classList.add("is-resizing");
+    rsSide.setPointerCapture(e.pointerId);
+  });
+  rsSide.addEventListener("pointermove", e => {
+    if (!dragSide) return;
+    const maxW = Math.min(460, Math.max(240, window.innerWidth * 0.42));
+    state.sidebarWidth = Math.round(Math.min(maxW, Math.max(160, startW + (e.clientX - startX))));
+    applyPaneSizes();
+  });
+  const endSide = e => {
+    if (!dragSide) return;
+    dragSide = false;
+    rsSide.classList.remove("dragging");
+    document.body.classList.remove("is-resizing");
+    try { rsSide.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  rsSide.addEventListener("pointerup", endSide);
+  rsSide.addEventListener("pointercancel", endSide);
+  rsSide.addEventListener("dblclick", () => {
+    state.sidebarWidth = 248;
+    applyPaneSizes();
+    showToast("Đã đặt lại độ rộng thanh bên mặc định (248 px)");
+  });
+
+  const rsSplit = $("resizerSplit");
+  let dragSplit = false;
+  rsSplit.addEventListener("pointerdown", e => {
+    if (state.view !== "split") return;
+    dragSplit = true;
+    rsSplit.classList.add("dragging");
+    document.body.classList.add("is-resizing");
+    rsSplit.setPointerCapture(e.pointerId);
+  });
+  rsSplit.addEventListener("pointermove", e => {
+    if (!dragSplit) return;
+    const rect = $("panes").getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = (e.clientX - rect.left) / rect.width;
+    state.splitRatio = Math.min(0.78, Math.max(0.22, ratio));
+    applyPaneSizes();
+  });
+  const endSplit = e => {
+    if (!dragSplit) return;
+    dragSplit = false;
+    rsSplit.classList.remove("dragging");
+    document.body.classList.remove("is-resizing");
+    try { rsSplit.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  rsSplit.addEventListener("pointerup", endSplit);
+  rsSplit.addEventListener("pointercancel", endSplit);
+  rsSplit.addEventListener("dblclick", () => {
+    state.splitRatio = 0.5;
+    applyPaneSizes();
+    showToast("Đã đặt lại tỷ lệ Soạn thảo / Xem trước (50 / 50)");
+  });
+})();
+
+// Ensure view switch reapplies split ratio cleanly
+const _origSetView = setView;
+setView = function(mode) {
+  _origSetView(mode);
+  applyPaneSizes();
+};
+
+// Init
+applyPaneSizes();
+renderTabs();
+renderDocument();
+</script>
+</body>
+</html>

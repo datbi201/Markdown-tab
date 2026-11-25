@@ -99,7 +99,9 @@ pub fn ibtn(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, enabled: bool, s
 fn icon_menu_impl(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, close: egui::PopupCloseBehavior, add: impl FnOnce(&mut egui::Ui)) {
     let id = ui.make_persistent_id(("icmenu", tip));
     let open = ui.memory(|m| m.is_popup_open(id));
-    let r = ibtn(ui, icon, tip, hue, true, open);
+    let r = ibtn_w(ui, icon, tip, hue, true, open, 38.0);
+    let chev_rect = egui::Rect::from_center_size(egui::pos2(r.rect.right() - 6.5, r.rect.center().y + 1.0), egui::vec2(8.0, 8.0));
+    icons::paint(ui.painter(), chev_rect, "chev", ui.visuals().weak_text_color());
     if r.clicked() {
         ui.memory_mut(|m| m.toggle_popup(id));
     }
@@ -723,6 +725,22 @@ impl App {
         }
     }
 
+    pub fn export_md(&mut self) {
+        let Some(doc) = self.docs.get(self.active) else { return };
+        let default_name = doc.path.as_ref().and_then(|p| p.file_stem()).map(|s| format!("{}.md", s.to_string_lossy())).unwrap_or_else(|| "tai-lieu.md".into());
+        if let Some(p) = rfd::FileDialog::new()
+            .set_title("Xuất bản sao Markdown (.md)")
+            .set_file_name(default_name)
+            .add_filter("Markdown", &["md", "markdown"])
+            .save_file()
+        {
+            match std::fs::write(&p, &doc.text) {
+                Ok(()) => self.status = format!("Đã xuất MD: {}", p.display()),
+                Err(e) => self.status = format!("Lỗi xuất MD: {e}"),
+            }
+        }
+    }
+
     /// In / lưu PDF: mở bản HTML trong trình duyệt mặc định, hộp thoại In tự bật (chọn "Lưu thành PDF").
     fn export_pdf(&mut self, ctx: &egui::Context) {
         let Some(html) = self.build_html(true) else { return };
@@ -889,6 +907,11 @@ impl App {
                         ui.add_space(6.0);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // nut Tap trung (Zen)
+                        let ztip = if self.zen_mode { "Thoát chế độ Tập trung (Zen)" } else { "Chế độ Tập trung / Zen (ẩn thanh công cụ & mục lục)" };
+                        if ibtn(ui, "maximize", ztip, 185.0, true, self.zen_mode).clicked() {
+                            self.zen_mode = !self.zen_mode;
+                        }
                         // nut sang / toi
                         let (icon, tip) = if dark { ("sun", "Chuyển sang giao diện sáng") } else { ("moon", "Chuyển sang giao diện tối") };
                         if ibtn(ui, icon, tip, if dark { 45.0 } else { 255.0 }, true, false).clicked() {
@@ -896,7 +919,29 @@ impl App {
                             apply_theme(ctx, self.dark);
                             self.persist_session();
                         }
-                        ui.add_space(6.0);
+                        // chon 4 mau chu dao ngay tren thanh dinh
+                        let mut picked_accent: Option<usize> = None;
+                        icon_menu(ui, "palette", "Đổi màu chủ đạo", 265.0, |ui| {
+                            ui.label(RichText::new("Màu chủ đạo").small().color(ui.visuals().weak_text_color()));
+                            for (i, (name, light_c, bright_c)) in ACCENTS.iter().enumerate() {
+                                let c = if dark { *bright_c } else { *light_c };
+                                let mark = if accent_index() == i { "✓ " } else { "   " };
+                                if ui.button(RichText::new(format!("{mark}{name}")).color(c)).clicked() {
+                                    picked_accent = Some(i);
+                                }
+                            }
+                        });
+                        if let Some(i) = picked_accent {
+                            set_accent_index(i);
+                            apply_theme(ctx, self.dark);
+                            self.persist_session();
+                        }
+                        // bang lenh nhanh Ctrl+Shift+P
+                        if ibtn(ui, "search", "Bảng lệnh nhanh (Ctrl+Shift+P)", 215.0, true, self.cmd_open).clicked() {
+                            self.cmd_open = !self.cmd_open;
+                            self.cmd_query.clear();
+                        }
+                        ui.add_space(4.0);
                         // che do xem (phan doan): them theo thu tu phai -> trai, nen nen duoc ve sau cung
                         let compact = wide < 1080.0;
                         let bg_idx = ui.painter().add(egui::Shape::Noop);
@@ -918,7 +963,7 @@ impl App {
             });
 
         // ---- hang 2: nut bieu tuong cua tab (nho gon, khong ten, tooltip khi re chuot) ----
-        if !self.ribbon_open {
+        if !self.ribbon_open || self.zen_mode {
             return;
         }
         egui::TopBottomPanel::top("ribbon-body")
@@ -985,6 +1030,23 @@ impl App {
         }
         if let Some(p) = open {
             self.open_recent(&p);
+        }
+        vsep(ui);
+        // Cum nut Xuat nhanh (Word, PDF, MD, HTML, Print) dat ngay canh Tep mo gan day
+        if ibtn(ui, "word", "Xuất Word (.docx) — có ảnh, bảng, công thức OMML", 215.0, true, false).clicked() {
+            self.export_docx();
+        }
+        if ibtn(ui, "pdf", "Xuất PDF (.pdf)", 350.0, true, false).clicked() {
+            self.export_pdf(ctx);
+        }
+        if ibtn(ui, "md", "Xuất Markdown (.md)", 265.0, true, false).clicked() {
+            self.export_md();
+        }
+        if ibtn(ui, "globe", "Xuất HTML (.html) độc lập, nhúng ảnh", 185.0, true, false).clicked() {
+            self.export_html();
+        }
+        if ibtn(ui, "printer", "In tài liệu (Ctrl+P)", 28.0, true, false).clicked() {
+            self.export_pdf(ctx);
         }
         vsep(ui);
         if ibtn(ui, "save", "Lưu (Ctrl+S)", 150.0, true, false).clicked() {
@@ -1273,15 +1335,47 @@ impl App {
                                     }
                                 });
                             });
+                            let tab_rect = tab_out.response.rect;
+                            let tab_sense = ui.interact(tab_rect, ui.make_persistent_id(("tab-hit", i)), egui::Sense::click());
+                            if tab_sense.middle_clicked() {
+                                to_close = Some(i);
+                            }
+                            let mut close_others = false;
+                            let mut copy_path: Option<String> = None;
+                            tab_sense.context_menu(|ui| {
+                                if ui.button("Đóng tab này").clicked() {
+                                    to_close = Some(i);
+                                    ui.close_menu();
+                                }
+                                if ui.button("Đóng các tab khác").clicked() {
+                                    close_others = true;
+                                    ui.close_menu();
+                                }
+                                if let Some(fp) = &full_name {
+                                    if ui.button("Sao chép đường dẫn").clicked() {
+                                        copy_path = Some(fp.clone());
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
+                            if let Some(fp) = copy_path {
+                                ctx.copy_text(fp);
+                                self.status = "Đã sao chép đường dẫn tệp.".into();
+                            }
+                            if close_others {
+                                let keep_id = self.docs[i].id;
+                                self.docs.retain(|d| d.id == keep_id || d.dirty());
+                                self.active = self.docs.iter().position(|d| d.id == keep_id).unwrap_or(0);
+                                break;
+                            }
                             if selected {
-                                let r = tab_out.response.rect;
                                 ui.painter().line_segment(
-                                    [r.left_top() + egui::vec2(6.0, 1.0), r.right_top() + egui::vec2(-6.0, 1.0)],
+                                    [tab_rect.left_top() + egui::vec2(6.0, 1.0), tab_rect.right_top() + egui::vec2(-6.0, 1.0)],
                                     egui::Stroke::new(2.5, accent(self.dark)),
                                 );
                             }
                         }
-                        if ui.button("+").on_hover_text("Tab mới (Ctrl+N)").clicked() {
+                        if ibtn_w(ui, "plus", "Tab mới (Ctrl+N)", 215.0, true, false, 28.0).clicked() {
                             self.new_doc();
                         }
                         if let Some(i) = to_select {
@@ -1628,6 +1722,82 @@ impl App {
                 ui.add_space(6.0);
                 ui.label(RichText::new("Bảng mã TCVN3/VNI: dữ liệu từ thư viện vietnamese-conversion (MIT).").small().color(ui.visuals().weak_text_color()));
             });
+    }
+
+    pub fn ui_command_palette(&mut self, ctx: &egui::Context) {
+        if !self.cmd_open {
+            return;
+        }
+        let mut open = self.cmd_open;
+        let mut run_id: Option<&'static str> = None;
+        egui::Window::new("Bảng lệnh nhanh (Ctrl+Shift+P)")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(440.0)
+            .anchor(egui::Align2::CENTER_TOP, [0.0, 72.0])
+            .show(ctx, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.cmd_query)
+                        .hint_text("Gõ lệnh (vd: xuat word, pdf, md, html, in, sang, toi, zen, wrap)…")
+                        .desired_width(f32::INFINITY),
+                );
+                ui.add_space(6.0);
+                let q = self.cmd_query.trim().to_lowercase();
+                let items: &[(&'static str, &'static str, &'static str)] = &[
+                    ("word", "Xuất Word (.docx)", "xuat word docx"),
+                    ("pdf", "Xuất PDF (.pdf)", "xuat pdf"),
+                    ("md", "Xuất Markdown (.md)", "xuat md markdown"),
+                    ("html", "Xuất HTML (.html) độc lập", "xuat html"),
+                    ("print", "In tài liệu (Ctrl+P)", "in print"),
+                    ("fixer", "Sửa lỗi trình bày & font… (Ctrl+Shift+F)", "sua loi font tcvn3 vni mathtype"),
+                    ("theme", "Chuyển giao diện Sáng / Tối", "sang toi dark light theme"),
+                    ("zen", "Bật / Tắt chế độ Tập trung (Zen)", "zen tap trung toan man hinh"),
+                    ("wrap", "Bật / Tắt xuống dòng mềm (Soft Wrap)", "wrap xuong dong mem"),
+                    ("preview", "Chế độ xem: Xem trước (Ctrl+2)", "xem truoc preview"),
+                    ("split", "Chế độ xem: Chia đôi (Ctrl+3)", "chia doi split"),
+                    ("edit", "Chế độ xem: Soạn thảo (Ctrl+1)", "soan thao edit"),
+                    ("toc", "Hiện / Ẩn thanh Mục lục", "muc luc toc sidebar"),
+                    ("find", "Tìm & Thay thế (Ctrl+F)", "tim thay the find replace"),
+                ];
+                egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+                    for (id, label, keys) in items {
+                        if !q.is_empty() && !label.to_lowercase().contains(&q) && !keys.contains(&q) {
+                            continue;
+                        }
+                        if ui.selectable_label(false, *label).clicked() {
+                            run_id = Some(*id);
+                        }
+                    }
+                });
+            });
+        self.cmd_open = open;
+        if let Some(id) = run_id {
+            self.cmd_open = false;
+            match id {
+                "word" => self.export_docx(),
+                "pdf" | "print" => self.export_pdf(ctx),
+                "md" => self.export_md(),
+                "html" => self.export_html(),
+                "fixer" => self.open_fixer(),
+                "theme" => {
+                    self.dark = !self.dark;
+                    apply_theme(ctx, self.dark);
+                    self.persist_session();
+                }
+                "zen" => self.zen_mode = !self.zen_mode,
+                "wrap" => {
+                    self.word_wrap = !self.word_wrap;
+                    self.persist_session();
+                }
+                "preview" => self.view = ViewMode::Preview,
+                "split" => self.view = ViewMode::Split,
+                "edit" => self.view = ViewMode::Edit,
+                "toc" => self.show_toc = !self.show_toc,
+                "find" => self.find_open = !self.find_open,
+                _ => {}
+            }
+        }
     }
 }
 

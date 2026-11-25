@@ -68,6 +68,8 @@ ICONS = {
     "grid": '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
     "file": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
     "power": '<path d="M12 3v8M6.5 6.5a8 8 0 1 0 11 0"/>',
+    "pdf": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8 17v-5h2.2a1.7 1.7 0 0 1 0 3.4H8M14 14.5h2.5"/>',
+    "md": '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M6.5 15V9l2.5 3 2.5-3v6M16.5 9v6M14.5 13l2 2 2-2"/>',
 }
 
 

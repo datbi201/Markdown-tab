@@ -35,7 +35,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 // ------------------------------------------------------------------ consts
 const APP_TITLE: &str = "Markdown Tabs";
-const VERSION: &str = "0.6.0-rust";
+const VERSION: &str = "0.7.0-rust";
 const IPC_PORT: u16 = 47655;
 const IPC_MAGIC: &str = "MDTABS/1";
 const MD_EXTS: &[&str] = &["md", "markdown", "mdown", "mkd", "txt"];
@@ -911,25 +911,32 @@ fn render_blocks(
                 ui.add_space(4.0);
             }
             Block::Code(info, text) => {
+                let dark = ui.visuals().dark_mode;
+                let bg = if dark { Color32::from_rgb(13, 17, 23) } else { Color32::from_rgb(246, 248, 250) };
+                let fg = if dark { Color32::from_rgb(230, 237, 243) } else { Color32::from_rgb(15, 23, 42) };
+                let bd = border_color(dark);
                 egui::Frame::default()
-                    .fill(Color32::from_rgb(13, 17, 23))
+                    .fill(bg)
+                    .stroke(egui::Stroke::new(1.0, bd))
                     .inner_margin(egui::Margin::same(12.0))
                     .rounding(egui::Rounding::same(8.0))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        if !info.is_empty() {
-                            ui.label(
-                                RichText::new(info)
-                                    .size(11.0)
-                                    .color(Color32::from_rgb(139, 148, 158)),
-                            );
-                        }
-                        // dong code dai: tu xuong dong (be o bat ky dau) thay vi tran ra ngoai
+                        ui.horizontal(|ui| {
+                            let lbl = if info.is_empty() { "code" } else { info.as_str() };
+                            ui.label(RichText::new(lbl).size(11.5).color(ui.visuals().weak_text_color()));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.add(egui::Button::new(RichText::new("Sao chép").size(11.5)).min_size(egui::vec2(0.0, 22.0))).clicked() {
+                                    ui.ctx().copy_text(text.trim_end_matches('\n').to_string());
+                                }
+                            });
+                        });
+                        ui.add_space(4.0);
                         let mut job = LayoutJob::single_section(
                             text.trim_end_matches('\n').to_string(),
                             TextFormat {
                                 font_id: FontId::monospace(13.0 * zs),
-                                color: Color32::from_rgb(230, 237, 243),
+                                color: fg,
                                 ..Default::default()
                             },
                         );
@@ -1082,31 +1089,45 @@ fn render_blocks(
 fn editor_layouter(ui: &egui::Ui, text: &str, wrap_width: f32) -> Arc<egui::Galley> {
     let dark = ui.visuals().dark_mode;
     let normal = ui.visuals().text_color();
-    let heading_c = if dark { Color32::from_rgb(121, 192, 255) } else { Color32::from_rgb(5, 80, 174) };
-    let code_c = if dark { Color32::from_rgb(165, 214, 255) } else { Color32::from_rgb(160, 80, 0) };
+    let heading_c = if dark { Color32::from_rgb(121, 192, 255) } else { Color32::from_rgb(29, 78, 216) };
+    let code_c = if dark { Color32::from_rgb(165, 214, 255) } else { Color32::from_rgb(180, 83, 9) };
+    let math_c = if dark { Color32::from_rgb(110, 231, 183) } else { Color32::from_rgb(4, 120, 87) };
+    let tbl_c = if dark { Color32::from_rgb(196, 181, 253) } else { Color32::from_rgb(109, 40, 217) };
     let mut job = LayoutJob::default();
-    job.wrap.max_width = f32::INFINITY; // khong xuong dong: 1 dong logic = 1 dong hien thi (cho cot so dong khop)
+    let do_wrap = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(egui::Id::new("md-editor-wrap")))
+        .unwrap_or(true);
+    job.wrap.max_width = if do_wrap { wrap_width.max(120.0) } else { f32::INFINITY };
     let fsize = ui
         .ctx()
         .data(|d| d.get_temp::<f32>(egui::Id::new("md-editor-font")))
         .unwrap_or(13.5);
     let font = FontId::monospace(fsize);
     let mut in_fence = false;
+    let mut in_math = false;
     for line in text.split_inclusive('\n') {
         let trimmed = line.trim_start();
         let is_fence = trimmed.starts_with("```");
+        let is_math_fence = trimmed.starts_with("$$");
         let color = if in_fence || is_fence {
             code_c
+        } else if in_math || is_math_fence {
+            math_c
         } else if trimmed.starts_with('#') {
             heading_c
         } else if trimmed.starts_with('>') {
             ui.visuals().weak_text_color()
+        } else if trimmed.starts_with('|') {
+            tbl_c
         } else {
             normal
         };
         job.append(line, 0.0, TextFormat { font_id: font.clone(), color, ..Default::default() });
         if is_fence {
             in_fence = !in_fence;
+        } else if is_math_fence && trimmed.trim_end().len() == 2 {
+            in_math = !in_math;
         }
     }
     if text.is_empty() {
@@ -1203,10 +1224,16 @@ struct Session {
     autosave: bool,
     #[serde(default)]
     accent: u8,
+    #[serde(default = "default_true")]
+    word_wrap: bool,
 }
 
 fn default_zoom() -> f32 {
     1.0
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn session_path() -> PathBuf {
@@ -1217,7 +1244,7 @@ fn load_session() -> Session {
     std::fs::read_to_string(session_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false, accent: 0 })
+        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false, accent: 0, word_wrap: true })
 }
 
 fn save_session(s: &Session) {
@@ -1277,6 +1304,12 @@ struct App {
     autosave: bool,
     last_autosave: Instant,
     fullscreen: bool,
+    // ---- v0.7: soft wrap, zen mode, bang lenh nhanh, loc muc luc ----
+    word_wrap: bool,
+    zen_mode: bool,
+    cmd_open: bool,
+    cmd_query: String,
+    toc_filter: String,
 }
 
 impl App {
@@ -1319,6 +1352,11 @@ impl App {
             autosave: session.autosave,
             last_autosave: Instant::now(),
             fullscreen: false,
+            word_wrap: session.word_wrap,
+            zen_mode: false,
+            cmd_open: false,
+            cmd_query: String::new(),
+            toc_filter: String::new(),
         };
         // (che do kiem thu giao dien) MDT_DARK=1|0, MDT_ACCENT=0..3 ghi de phien da luu
         let dark_now = match std::env::var("MDT_DARK").as_deref() {
@@ -1533,7 +1571,7 @@ impl App {
             .iter()
             .filter_map(|d| d.path.as_ref().map(|p| p.to_string_lossy().into_owned()))
             .collect();
-        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave, accent: accent_index() as u8 });
+        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave, accent: accent_index() as u8, word_wrap: self.word_wrap });
     }
 }
 
@@ -1615,9 +1653,17 @@ pub fn tabstrip_fill(dark: bool) -> Color32 {
 
 /// Mau nen vung noi dung (khop panel_fill cua theme) - dung de lap day panel
 /// tranh vung "trong suot" lo nen den cua he dieu hanh.
+pub fn canvas_fill(dark: bool) -> Color32 {
+    if dark {
+        rgb(15, 20, 30)
+    } else {
+        rgb(238, 242, 247)
+    }
+}
+
 pub fn content_fill(dark: bool) -> Color32 {
     if dark {
-        rgb(18, 22, 31)
+        rgb(24, 32, 48)
     } else {
         Color32::WHITE
     }
@@ -2358,47 +2404,89 @@ impl eframe::App for App {
         if k_z100 {
             self.set_zoom(ctx, 1.0);
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.ctrl && i.modifiers.shift) {
+            self.cmd_open = !self.cmd_open;
+            self.cmd_query.clear();
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.cmd_open {
+            self.cmd_open = false;
+        }
 
         // ---- ribbon (File / Dinh dang / Chen / Xem / Xuat / Cong cu / Tro giup) + thanh tab ----
         self.ui_ribbon(ctx);
         self.ui_tabbar(ctx);
 
-        // ---- thanh trang thai ----
-        egui::TopBottomPanel::bottom("statusbar")
-            .frame(
-                egui::Frame::default()
-                    .fill(chrome_fill(self.dark))
-                    .inner_margin(egui::Margin::symmetric(10.0, 4.0)),
-            )
-            .show(ctx, |ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let Some(doc) = self.docs.get(self.active) {
-                    let path_txt = doc
-                        .path
-                        .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| "(chưa lưu vào file)".into());
-                    let words = doc.text.split_whitespace().count();
-                    let chars = doc.text.chars().count();
-                    let before: String = doc.text.chars().take(doc.cursor_char).collect();
-                    let line = before.matches('\n').count() + 1;
-                    let col = before.rsplit('\n').next().map(|s| s.chars().count()).unwrap_or(0) + 1;
-                    ui.label(format!("{} | Dòng {}, Cột {} | {} từ · {} ký tự",
-                                     doc.enc.label(), line, col, words, chars));
-                    if !self.status.is_empty() {
-                        vsep(ui);
-                        ui.add(egui::Label::new(RichText::new(&self.status).color(ui.visuals().text_color())).truncate());
-                        vsep(ui);
-                    }
-                    ui.add(egui::Label::new(path_txt).truncate());
-                    vsep(ui);
-                    let (txt, col) = if doc.dirty() { ("Chưa lưu", AMBER) } else { ("Đã lưu", rgb(30, 160, 90)) };
-                    ui.label(RichText::new(format!("● {txt}")).color(col).strong());
-                } else if !self.status.is_empty() {
-                    ui.label(&self.status);
-                }
-            });
-        });
+        // ---- thanh trang thai 3 vung (v0.7: luon hien Da luu / Chua luu, khong lap duong dan) ----
+        if !self.zen_mode {
+            let mut toggle_wrap = false;
+            let mut reset_zoom = false;
+            egui::TopBottomPanel::bottom("statusbar")
+                .frame(
+                    egui::Frame::default()
+                        .fill(chrome_fill(self.dark))
+                        .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
+                        .inner_margin(egui::Margin::symmetric(12.0, 4.0)),
+                )
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        if let Some(doc) = self.docs.get(self.active) {
+                            let (txt, col) = if doc.dirty() { ("Chưa lưu", AMBER) } else { ("Đã lưu", rgb(16, 163, 98)) };
+                            ui.label(RichText::new(format!("● {txt}")).color(col).strong().size(12.5));
+                            vsep(ui);
+                            let short_name = doc
+                                .path
+                                .as_ref()
+                                .and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned()))
+                                .unwrap_or_else(|| "(tài liệu mới)".into());
+                            let full_path = doc
+                                .path
+                                .as_ref()
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_else(|| "Chưa lưu vào đĩa".into());
+                            ui.add(egui::Label::new(RichText::new(short_name).size(12.5).color(ui.visuals().weak_text_color())).truncate())
+                                .on_hover_text(full_path);
+                            if !self.status.is_empty() && !self.status.starts_with("Đã mở:") {
+                                vsep(ui);
+                                ui.add(egui::Label::new(RichText::new(&self.status).size(12.5).color(accent(self.dark))).truncate());
+                            }
+                            let words = doc.text.split_whitespace().count();
+                            let chars = doc.text.chars().count();
+                            let before: String = doc.text.chars().take(doc.cursor_char).collect();
+                            let line = before.matches('\n').count() + 1;
+                            let col_n = before.rsplit('\n').next().map(|s| s.chars().count()).unwrap_or(0) + 1;
+                            let enc = doc.enc.label();
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.label(RichText::new(format!("{enc} | Dòng {line}, Cột {col_n} | {words} từ · {chars} ký tự")).size(12.0).color(ui.visuals().weak_text_color()));
+                                vsep(ui);
+                                if ui.add(egui::Button::new(RichText::new(format!("{:.0}%", self.zoom * 100.0)).size(12.0)).frame(false))
+                                    .on_hover_text("Đặt lại thu phóng 100% (Ctrl+0)")
+                                    .clicked()
+                                {
+                                    reset_zoom = true;
+                                }
+                                vsep(ui);
+                                let w_lbl = if self.word_wrap { "Wrap: Bật" } else { "Wrap: Tắt" };
+                                let w_col = if self.word_wrap { accent(self.dark) } else { ui.visuals().weak_text_color() };
+                                if ui.add(egui::Button::new(RichText::new(w_lbl).size(12.0).color(w_col)).frame(false))
+                                    .on_hover_text("Bật / tắt tự xuống dòng mềm trong khung Soạn thảo")
+                                    .clicked()
+                                {
+                                    toggle_wrap = true;
+                                }
+                            });
+                        } else if !self.status.is_empty() {
+                            ui.label(&self.status);
+                        }
+                    });
+                });
+            if toggle_wrap {
+                self.word_wrap = !self.word_wrap;
+                self.persist_session();
+            }
+            if reset_zoom {
+                self.set_zoom(ctx, 1.0);
+            }
+        }
 
         // ---- thanh tim kiem ----
         if self.find_open {
@@ -2435,16 +2523,17 @@ impl eframe::App for App {
             });
         }
 
-        // ---- muc luc ----
-        if self.show_toc {
+        // ---- muc luc (co o loc nhanh & keo chinh do rong) ----
+        if self.show_toc && !self.zen_mode {
             let sw = ctx.screen_rect().width();
             egui::SidePanel::left("toc")
                 .resizable(true)
-                .default_width((sw * 0.25).clamp(130.0, 235.0))
-                .width_range(110.0..=(sw * 0.4).clamp(130.0, 420.0))
+                .default_width((sw * 0.22).clamp(160.0, 248.0))
+                .width_range(140.0..=(sw * 0.42).clamp(160.0, 460.0))
                 .frame(
                     egui::Frame::default()
                         .fill(chrome_fill(self.dark))
+                        .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
                         .inner_margin(egui::Margin::same(10.0)),
                 )
                 .show(ctx, |ui| {
@@ -2453,7 +2542,14 @@ impl eframe::App for App {
                             .font(FontId::new(11.0, egui::FontFamily::Name("InterSemiBold".into())))
                             .color(ui.visuals().weak_text_color()),
                     );
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.toc_filter)
+                            .hint_text("Lọc tiêu đề…")
+                            .desired_width(f32::INFINITY),
+                    );
                     ui.add_space(6.0);
+                    let q = self.toc_filter.trim().to_lowercase();
                     let mut goto: Option<usize> = None;
                     if let Some(doc) = self.docs.get(self.active) {
                         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
@@ -2461,6 +2557,9 @@ impl eframe::App for App {
                                 ui.label(RichText::new("(Chưa có tiêu đề)").color(ui.visuals().weak_text_color()));
                             }
                             for e in &doc.toc {
+                                if !q.is_empty() && !e.title.to_lowercase().contains(&q) {
+                                    continue;
+                                }
                                 let indent = (e.level.saturating_sub(1)) as f32 * 14.0;
                                 ui.horizontal(|ui| {
                                     ui.add_space(indent);
@@ -2506,7 +2605,10 @@ impl eframe::App for App {
         let editor_ui = |app: &mut App, ui: &mut egui::Ui| {
             let Some(active_id) = app.docs.get(app.active).map(|d| d.id) else { return };
             // Co chu de layouter biet co chu hien tai (zoom noi dung)
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("md-editor-font"), 13.5 * app.zoom));
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::new("md-editor-font"), 13.5 * app.zoom);
+                d.insert_temp(egui::Id::new("md-editor-wrap"), app.word_wrap);
+            });
             // Lenh nhay (TOC / tim kiem) cho tab dang mo, neu co
             let mut pending_range: Option<(usize, usize)> = None;
             if let Some((id, from, to)) = app.find_goto {
@@ -2708,8 +2810,8 @@ impl eframe::App for App {
             let avail_w = ctx.available_rect().width();
             egui::SidePanel::left("editor-panel")
                 .resizable(true)
-                .default_width((avail_w * 0.5).clamp(240.0, 560.0))
-                .width_range(200.0..=(avail_w - 220.0).max(200.0))
+                .default_width((avail_w * 0.5).clamp(220.0, 680.0))
+                .width_range(180.0..=(avail_w - 220.0).max(220.0))
                 .frame(
                     egui::Frame::default()
                         .fill(content_fill(self.dark))
@@ -2721,7 +2823,10 @@ impl eframe::App for App {
                 });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let central_bg = if show_preview { canvas_fill(self.dark) } else { content_fill(self.dark) };
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().fill(central_bg).inner_margin(egui::Margin::same(0.0)))
+            .show(ctx, |ui| {
             if show_editor && !show_preview {
                 editor_ui(self, ui);
             } else if show_preview {
@@ -2743,20 +2848,24 @@ impl eframe::App for App {
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            // Cot noi dung o giua, rong toi da 880px nhu cac app doc hien dai
                             let avail = ui.available_width() - 4.0;
-                            let w = (avail - 24.0).clamp(160.0, 880.0).min(avail.max(160.0));
-                            let m = ((avail - w) / 2.0).max(0.0);
-                            ui.add_space(10.0);
+                            let w = (avail - 36.0).clamp(180.0, 840.0).min(avail.max(180.0));
+                            let m = ((avail - w) / 2.0).max(8.0);
+                            ui.add_space(16.0);
                             ui.horizontal_top(|ui| {
                                 ui.add_space(m);
-                                ui.vertical(|ui| {
-                                    ui.set_width(w);
-                                    let mut seed = 1u64;
-                                    render_blocks(ui, &ast, &doc_dir, &mut preview_actions, &mut seed, &mut self.img_cache, self.zoom, false);
-                                    ui.add_space(24.0);
-                                });
+                                egui::Frame::default()
+                                    .fill(content_fill(self.dark))
+                                    .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
+                                    .rounding(egui::Rounding::same(12.0))
+                                    .inner_margin(egui::Margin::symmetric(28.0, 24.0))
+                                    .show(ui, |ui| {
+                                        ui.set_width((w - 56.0).max(140.0));
+                                        let mut seed = 1u64;
+                                        render_blocks(ui, &ast, &doc_dir, &mut preview_actions, &mut seed, &mut self.img_cache, self.zoom, false);
+                                    });
                             });
+                            ui.add_space(28.0);
                         });
                 }
             }
@@ -2774,6 +2883,7 @@ impl eframe::App for App {
 
         // ---- hop thoai (sua loi, kiem tra cong thuc, thong ke, tro giup) ----
         self.ui_dialogs(ctx);
+        self.ui_command_palette(ctx);
 
         // ---- hop thoai xac nhan dong ----
         if let Some(req) = &self.close_req {
