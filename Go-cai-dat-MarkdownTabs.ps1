@@ -1,8 +1,7 @@
-﻿# =====================================================================
-#  Markdown Tabs (Rust native) v0.5 - Go cai dat (per-user)
+# =====================================================================
+#  Markdown Tabs (Rust native) - Go cai dat (per-user)
 #  Xoa exe, shortcut, dang ky lien ket va muc Uninstall.
-#  Giu lai thu muc cau hinh %APPDATA%\MarkdownTabs (phien lam viec);
-#  muon xoa sach thi xoa tay thu muc do.
+#  Giu lai thu muc cau hinh %APPDATA%\MarkdownTabs (phien lam viec).
 # =====================================================================
 param([switch]$Silent)
 $ErrorActionPreference = "Continue"
@@ -59,7 +58,7 @@ if (Test-Path $InstallDir) {
         Say "Da go xong. Thu muc cai dat se tu xoa trong vai giay."
     } else {
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-        Say "Da xoa thu muc cai dat (neu con file dang mo thi xoa tay not)."
+        Say "Da xoa thu muc cai dat."
     }
 }
 Say "Go cai dat hoan tat."

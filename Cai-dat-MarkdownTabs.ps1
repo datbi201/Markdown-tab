@@ -1,10 +1,9 @@
-﻿# =====================================================================
-#  Markdown Tabs (Rust native) v0.5 - Trinh cai dat per-user cho Windows
-#  - Cai vao: %LOCALAPPDATA%\Programs\Markdown Tabs (ghi de ban Python
-#    neu da cai v1.2 o cung thu muc - shortcut/lien ket cu van dung duoc
-#    vi cung ten file MarkdownTabs.exe)
-#  - Chi la 1 file .exe native: khong can Python, khong can cai them gi
-#  - Dang ky .md/.markdown/.mdown + dat mac dinh (hoi Y/N nhu ban truoc)
+# =====================================================================
+#  Markdown Tabs (Rust native) - Trinh cai dat per-user cho Windows
+#  - Cai vao: %LOCALAPPDATA%\Programs\Markdown Tabs
+#  - Tu dong nhan dien phien ban moi nhat tu MarkdownTabs.exe / Cargo.toml
+#  - Tim MarkdownTabs.exe trong thu muc hien tai, ..\02_LOCAL_RUNTIME,
+#    hoac thu muc build release.
 #  Tham so: -NoDesktopShortcut  -SetDefault  -Silent
 # =====================================================================
 param(
@@ -14,13 +13,32 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $AppName    = "Markdown Tabs"
-$Version    = "0.5.0-rust"
 $ProgId     = "MarkdownTabs.Document"
 $ExeName    = "MarkdownTabs.exe"
 $IconName   = "MarkdownTabs_v1.2.ico"
 $Exts       = @(".md", ".markdown", ".mdown")
 $PkgDir     = $PSScriptRoot
 $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\Markdown Tabs"
+
+# Tim file MarkdownTabs.exe moi nhat
+$Candidates = @(
+    (Join-Path $PkgDir $ExeName),
+    (Join-Path (Split-Path -Parent $PkgDir) "02_LOCAL_RUNTIME\$ExeName"),
+    (Join-Path $PkgDir "src-rust\target\release\$ExeName"),
+    "D:\mdtabs-target\release\$ExeName"
+)
+$ExeSource = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+# Tu dong doc phien ban tu Cargo.toml hoac tu FileVersionInfo cua exe
+$Version = "latest"
+$CargoToml = Join-Path $PkgDir "src-rust\Cargo.toml"
+if (Test-Path $CargoToml) {
+    $m = Select-String -Path $CargoToml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
+    if ($m) { $Version = "$($m.Matches[0].Groups[1].Value)-rust" }
+} elseif ($ExeSource) {
+    $vi = (Get-Item $ExeSource).VersionInfo
+    if ($vi.ProductVersion) { $Version = $vi.ProductVersion }
+}
 
 function Say($msg) { Write-Host $msg }
 function Set-RegString($path, $name, $value) {
@@ -50,12 +68,12 @@ Say "=== Cai dat $AppName ban Rust native v$Version ==="
 Say "Thu muc cai: $InstallDir"
 Say ""
 
-if (-not (Test-Path (Join-Path $PkgDir $ExeName))) {
-    Say "LOI: Thieu file $ExeName trong goi cai dat. Hay giai nen TOAN BO file zip roi chay lai."
+if (-not $ExeSource) {
+    Say "LOI: Khong tim thay file $ExeName (trong thu muc hien tai hoac 02_LOCAL_RUNTIME)."
+    Say "Hay chay Bien-dich-Windows.bat hoac giai nen goi phat hanh roi chay lai."
     exit 1
 }
 
-# Dung instance dang chay de khong bi khoa file khi copy de
 $running = Get-Process -Name "MarkdownTabs" -ErrorAction SilentlyContinue
 if ($running) {
     Say "Dang dong Markdown Tabs dang chay de cap nhat..."
@@ -64,16 +82,15 @@ if ($running) {
 }
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item (Join-Path $PkgDir $ExeName) (Join-Path $InstallDir $ExeName) -Force
+Copy-Item $ExeSource (Join-Path $InstallDir $ExeName) -Force
 if (Test-Path (Join-Path $PkgDir $IconName)) { Copy-Item (Join-Path $PkgDir $IconName) (Join-Path $InstallDir $IconName) -Force }
-foreach ($f in @("Go-cai-dat-MarkdownTabs-Rust_v0.5.ps1", "Go-cai-dat-MarkdownTabs-Rust_v0.5.bat")) {
+foreach ($f in @("Go-cai-dat-MarkdownTabs.ps1", "Go-cai-dat-MarkdownTabs.bat")) {
     $src = Join-Path $PkgDir $f
     if (Test-Path $src) { Copy-Item $src (Join-Path $InstallDir $f) -Force }
 }
 $ExePath = Join-Path $InstallDir $ExeName
-Say "Da copy MarkdownTabs.exe (ban Rust native)."
+Say "Da copy $ExeName tu: $ExeSource"
 
-# Shortcut
 function New-AppShortcut($linkPath) {
     $dir = Split-Path $linkPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
@@ -93,7 +110,6 @@ if (-not $NoDesktopShortcut) {
 }
 Say "Da tao shortcut Start Menu" + $(if (-not $NoDesktopShortcut) { " va Desktop." } else { "." })
 
-# Dang ky lien ket file
 $OpenCmd = "`"$ExePath`" `"%1`""
 Set-RegString "HKCU:\Software\Classes\$ProgId" "(Default)" "Markdown Document"
 Set-RegString "HKCU:\Software\Classes\$ProgId\DefaultIcon" "(Default)" "$ExePath,0"
@@ -111,19 +127,17 @@ Set-RegString "$appKey" "FriendlyAppName" $AppName
 foreach ($ext in $Exts) { Set-RegString "$appKey\SupportedTypes" $ext "" }
 Say "Da dang ky Markdown Tabs cho .md, .markdown, .mdown."
 
-# Muc go cai dat
 $uninst = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MarkdownTabs"
 Set-RegString $uninst "DisplayName" "$AppName (Rust native)"
 Set-RegString $uninst "DisplayVersion" $Version
 Set-RegString $uninst "Publisher" "LisaTools"
 Set-RegString $uninst "InstallLocation" $InstallDir
 Set-RegString $uninst "DisplayIcon" $ExePath
-$uninstPs1 = Join-Path $InstallDir "Go-cai-dat-MarkdownTabs-Rust_v0.5.ps1"
+$uninstPs1 = Join-Path $InstallDir "Go-cai-dat-MarkdownTabs.ps1"
 Set-RegString $uninst "UninstallString" "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$uninstPs1`""
 Set-RegDword $uninst "NoModify" 1
 Set-RegDword $uninst "NoRepair" 1
 
-# Dat mac dinh
 $doDefault = $SetDefault
 if (-not $doDefault -and -not $Silent) {
     Say ""
@@ -144,8 +158,6 @@ if ($doDefault) {
 
 Refresh-Associations
 Say ""
-Say "=== CAI DAT HOAN TAT ==="
+Say "=== CAI DAT HOAN TAT (v$Version) ==="
 Say "Mo ung dung: Start Menu > Markdown Tabs hoac shortcut Desktop."
-Say "Thu ngay: nhap dup file Test-Rust_v0.5.md trong goi nay; khi app dang mo san,"
-Say "nhap dup them mot file .md khac ngoai Explorer - file se mo thanh TAB trong cua so do."
 if (-not $Silent) { Read-Host "Nhan Enter de dong" }
