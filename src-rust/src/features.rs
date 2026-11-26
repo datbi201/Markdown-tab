@@ -4,6 +4,7 @@
 use super::*;
 use crate::{docx, fixer, icons, math};
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RibbonTab {
     File,
@@ -15,6 +16,7 @@ pub enum RibbonTab {
     Help,
 }
 
+#[allow(dead_code)]
 impl RibbonTab {
     pub const ALL: [(RibbonTab, &'static str); 7] = [
         (RibbonTab::File, "File"),
@@ -37,6 +39,7 @@ pub enum Dialog {
     About,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 enum CaseMode {
     Upper,
@@ -79,7 +82,14 @@ pub fn ibtn_w(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, enabled: bool,
         if selected {
             painter.rect_stroke(rect, egui::Rounding::same(8.0), egui::Stroke::new(1.0, mix(bg, ac, 0.55)));
         }
-        let mut col = hue_color(hue, dark);
+        let _ = hue;
+        let mut col = if selected || hovered {
+            ac
+        } else if dark {
+            rgb(203, 213, 225)
+        } else {
+            rgb(51, 65, 85)
+        };
         if !enabled {
             col = col.gamma_multiply(0.35);
         }
@@ -97,11 +107,33 @@ pub fn ibtn(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, enabled: bool, s
 }
 
 fn icon_menu_impl(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, close: egui::PopupCloseBehavior, add: impl FnOnce(&mut egui::Ui)) {
+    let _ = hue;
     let id = ui.make_persistent_id(("icmenu", tip));
     let open = ui.memory(|m| m.is_popup_open(id));
-    let r = ibtn_w(ui, icon, tip, hue, true, open, 38.0);
-    let chev_rect = egui::Rect::from_center_size(egui::pos2(r.rect.right() - 6.5, r.rect.center().y + 1.0), egui::vec2(8.0, 8.0));
-    icons::paint(ui.painter(), chev_rect, "chev", ui.visuals().weak_text_color());
+    let dark = ui.visuals().dark_mode;
+    let ac = accent(dark);
+    let (rect, r) = ui.allocate_exact_size(egui::vec2(40.0, 32.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hovered = r.hovered();
+        let bg = if open {
+            accent_soft(dark)
+        } else if hovered {
+            mix(chrome_fill(dark), ac, if dark { 0.20 } else { 0.11 })
+        } else {
+            Color32::TRANSPARENT
+        };
+        let painter = ui.painter();
+        if bg != Color32::TRANSPARENT {
+            painter.rect_filled(rect, egui::Rounding::same(8.0), bg);
+        }
+        if open {
+            painter.rect_stroke(rect, egui::Rounding::same(8.0), egui::Stroke::new(1.0, mix(bg, ac, 0.55)));
+        }
+        let col = if open || hovered { ac } else if dark { rgb(203, 213, 225) } else { rgb(51, 65, 85) };
+        icons::paint(painter, egui::Rect::from_center_size(egui::pos2(rect.left() + 14.5, rect.center().y), egui::vec2(17.5, 17.5)), icon, col);
+        icons::paint(painter, egui::Rect::from_center_size(egui::pos2(rect.right() - 7.5, rect.center().y + 0.5), egui::vec2(8.0, 8.0)), "chev", ui.visuals().weak_text_color());
+    }
+    let r = r.on_hover_text(tip);
     if r.clicked() {
         ui.memory_mut(|m| m.toggle_popup(id));
     }
@@ -117,6 +149,7 @@ pub fn icon_menu(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, add: impl F
 }
 
 /// Nhu `icon_menu` nhung giu mo cho den khi bam ra ngoai (bang ky hieu).
+#[allow(dead_code)]
 pub fn icon_menu_keep(ui: &mut egui::Ui, icon: &str, tip: &str, hue: f32, add: impl FnOnce(&mut egui::Ui)) {
     icon_menu_impl(ui, icon, tip, hue, egui::PopupCloseBehavior::CloseOnClickOutside, add)
 }
@@ -126,7 +159,7 @@ fn seg_btn(ui: &mut egui::Ui, icon: &str, label: &str, selected: bool, tip: &str
     let dark = ui.visuals().dark_mode;
     let galley = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(13.5), Color32::PLACEHOLDER);
     let text_w = if label.is_empty() { 0.0 } else { galley.size().x + 6.0 };
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(10.0 + 16.0 + text_w + 10.0, 28.0), egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(8.0 + 15.0 + text_w + 8.0, 26.0), egui::Sense::click());
     let ac = accent(dark);
     let fg = if selected { if dark { rgb(10, 14, 22) } else { Color32::WHITE } } else { ui.visuals().text_color() };
     let p = ui.painter();
@@ -135,9 +168,9 @@ fn seg_btn(ui: &mut egui::Ui, icon: &str, label: &str, selected: bool, tip: &str
     } else if resp.hovered() {
         p.rect_filled(rect, egui::Rounding::same(8.0), accent_soft(dark));
     }
-    icons::paint(p, egui::Rect::from_center_size(egui::pos2(rect.left() + 10.0 + 8.0, rect.center().y), egui::vec2(16.0, 16.0)), icon, fg);
+    icons::paint(p, egui::Rect::from_center_size(egui::pos2(rect.left() + 8.0 + 7.5, rect.center().y), egui::vec2(15.0, 15.0)), icon, fg);
     if !label.is_empty() {
-        p.galley(egui::pos2(rect.left() + 10.0 + 16.0 + 6.0, rect.center().y - galley.size().y / 2.0), galley, fg);
+        p.galley(egui::pos2(rect.left() + 8.0 + 15.0 + 5.0, rect.center().y - galley.size().y / 2.0), galley, fg);
     }
     (resp.on_hover_text(tip).clicked(), rect)
 }
@@ -400,6 +433,7 @@ const MATH_TEMPLATES: &[(&str, &str)] = &[
     ("Nhiều dòng (aligned)", "\n$$\\begin{aligned} ⟦a⟧ &= b + c \\\\ &= d \\end{aligned}$$\n"),
 ];
 
+#[allow(dead_code)]
 const SYMBOLS: &[(&str, &[&str])] = &[
     ("Hy Lạp", &["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "λ", "μ", "π", "ρ", "σ", "τ", "φ", "ω", "Γ", "Δ", "Θ", "Λ", "Σ", "Φ", "Ψ", "Ω"]),
     ("Toán tử", &["±", "×", "÷", "≤", "≥", "≠", "≈", "≡", "∞", "∑", "∏", "∫", "√", "∂", "∇", "∈", "∉", "⊂", "∪", "∩", "→", "⇒", "⇔", "°", "²", "³", "½", "¼", "‰", "µ", "Ω", "…"]),
@@ -621,6 +655,7 @@ impl App {
         self.status = format!("Đã căn chỉnh bảng ({} dòng).", b - a + 1);
     }
 
+    #[allow(dead_code)]
     fn change_case(&mut self, mode: CaseMode) {
         let Some(doc) = self.docs.get_mut(self.active) else { return };
         let (a, b) = sel_text(doc);
@@ -742,7 +777,7 @@ impl App {
     }
 
     /// In / lưu PDF: mở bản HTML trong trình duyệt mặc định, hộp thoại In tự bật (chọn "Lưu thành PDF").
-    fn export_pdf(&mut self, ctx: &egui::Context) {
+    pub fn export_pdf(&mut self, ctx: &egui::Context) {
         let Some(html) = self.build_html(true) else { return };
         let dir = std::env::temp_dir().join("MarkdownTabs");
         let _ = std::fs::create_dir_all(&dir);
@@ -871,57 +906,184 @@ impl App {
         let dark = self.dark;
         let ac = accent(dark);
         let wide = ctx.screen_rect().width();
-        // ---- hang 1: logo + tab ribbon + che do xem + sang/toi ----
-        egui::TopBottomPanel::top("ribbon-tabs")
-            .frame(egui::Frame::default().fill(chrome_fill(dark)).inner_margin(egui::Margin { left: 12.0, right: 12.0, top: 7.0, bottom: 0.0 }))
+
+        // ---- HANG 1 (DUY NHAT): [M] + TAB TAI LIEU + "+" + TIM LENH + CHE DO XEM + MAU + SANG/TOI + ZEN ----
+        egui::TopBottomPanel::top("unified-header")
+            .frame(
+                egui::Frame::default()
+                    .fill(tabstrip_fill(dark))
+                    .stroke(egui::Stroke::new(1.0, border_color(dark)))
+                    .inner_margin(egui::Margin { left: 8.0, right: 10.0, top: 4.0, bottom: 4.0 }),
+            )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 0.0);
-                    ui.spacing_mut().button_padding = egui::vec2(11.0, 4.0);
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, egui::Rounding::same(9.0), ac);
-                    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "M", FontId::new(16.0, egui::FontFamily::Name("InterSemiBold".into())), if dark { rgb(10, 14, 22) } else { Color32::WHITE });
-                    if wide > 900.0 {
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Markdown Tabs").strong().size(15.0).color(ui.visuals().text_color())).on_hover_text(format!("Markdown Tabs v{VERSION}"));
+                    ui.spacing_mut().item_spacing = egui::vec2(5.0, 0.0);
+
+                    // Nut logo [M] de an/hien thanh ben (Muc luc / Thu muc)
+                    let (mrect, mresp) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+                    ui.painter().rect_filled(mrect, egui::Rounding::same(8.0), ac);
+                    ui.painter().text(
+                        mrect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "M",
+                        FontId::new(15.0, egui::FontFamily::Name("InterSemiBold".into())),
+                        if dark { rgb(11, 15, 23) } else { Color32::WHITE },
+                    );
+                    if mresp.on_hover_text(format!("Markdown Tabs v{VERSION} — Bấm để ẩn/hiện Mục lục")).clicked() {
+                        self.show_toc = !self.show_toc;
                     }
-                    ui.add_space(10.0);
-                    for (tab, label) in RibbonTab::ALL {
-                        let sel = self.ribbon == tab && self.ribbon_open;
-                        let txt = RichText::new(label).size(14.0).color(if sel { ac } else { ui.visuals().text_color() });
-                        let txt = if sel { txt.strong() } else { txt };
-                        let r = ui.add(egui::Button::new(txt).frame(false).min_size(egui::vec2(0.0, 30.0)));
-                        if sel {
-                            let y = r.rect.bottom();
-                            ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(r.rect.left() + 6.0, y - 3.0), egui::pos2(r.rect.right() - 6.0, y)), egui::Rounding { nw: 3.0, ne: 3.0, sw: 0.0, se: 0.0 }, ac);
-                        }
-                        if r.clicked() {
-                            if self.ribbon == tab {
-                                self.ribbon_open = !self.ribbon_open;
-                            } else {
-                                self.ribbon = tab;
-                                self.ribbon_open = true;
-                            }
-                        }
-                        r.on_hover_text("Bấm lần nữa để thu gọn / mở rộng thanh công cụ");
-                        ui.add_space(6.0);
-                    }
+
+                    // Cum phai (tinh truoc de danh khong gian cho dai Tab o giua)
+                    let compact = wide < 1180.0;
+                    let right_reserve = if compact { 320.0 } else { 515.0 };
+                    let tab_area_w = (ui.available_width() - right_reserve).max(140.0);
+
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(tab_area_w, 30.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            egui::ScrollArea::horizontal()
+                                .id_salt("unified-tabs-scroll")
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = 4.0;
+                                        let mut to_close: Option<usize> = None;
+                                        let mut to_select: Option<usize> = None;
+                                        for i in 0..self.docs.len() {
+                                            let doc = &self.docs[i];
+                                            let base = doc
+                                                .path
+                                                .as_ref()
+                                                .and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned()))
+                                                .unwrap_or_else(|| "Tài liệu mới".into());
+                                            let dirty = doc.dirty();
+                                            let selected = i == self.active;
+                                            let full_name = doc.path.as_ref().map(|p| p.display().to_string());
+                                            let base = if base.chars().count() > 22 {
+                                                format!("{}…", base.chars().take(21).collect::<String>())
+                                            } else {
+                                                base
+                                            };
+                                            let frame = egui::Frame::default()
+                                                .fill(if selected { chrome_fill(dark) } else { Color32::TRANSPARENT })
+                                                .stroke(if selected {
+                                                    egui::Stroke::new(1.0, border_color(dark))
+                                                } else {
+                                                    egui::Stroke::NONE
+                                                })
+                                                .rounding(egui::Rounding { nw: 8.0, ne: 8.0, sw: 0.0, se: 0.0 })
+                                                .inner_margin(egui::Margin::symmetric(9.0, 4.0));
+                                            let tab_out = frame.show(ui, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.spacing_mut().item_spacing.x = 5.0;
+                                                    let (ir, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+                                                    let ic_col = if selected { ac } else { ui.visuals().weak_text_color() };
+                                                    icons::paint(ui.painter(), ir, "file", ic_col);
+                                                    if dirty {
+                                                        let (dot, _) = ui.allocate_exact_size(egui::vec2(7.0, 7.0), egui::Sense::hover());
+                                                        ui.painter().circle_filled(dot.center(), 3.2, AMBER);
+                                                    }
+                                                    let mut txt = RichText::new(&base).size(13.0);
+                                                    if selected {
+                                                        txt = txt.strong().color(ui.visuals().text_color());
+                                                    }
+                                                    let lab = ui.add(egui::Label::new(txt).sense(egui::Sense::click()));
+                                                    let lab = match &full_name {
+                                                        Some(f) => lab.on_hover_text(f),
+                                                        None => lab,
+                                                    };
+                                                    if lab.clicked() {
+                                                        to_select = Some(i);
+                                                    }
+                                                    if ui
+                                                        .add(egui::Button::new(RichText::new("×").size(13.5)).frame(false).min_size(egui::vec2(18.0, 18.0)))
+                                                        .on_hover_text("Đóng tab (Ctrl+W)")
+                                                        .clicked()
+                                                    {
+                                                        to_close = Some(i);
+                                                    }
+                                                });
+                                            });
+                                            let tab_rect = tab_out.response.rect;
+                                            let body_rect = egui::Rect::from_min_max(
+                                                tab_rect.min,
+                                                egui::pos2((tab_rect.max.x - 24.0).max(tab_rect.min.x + 12.0), tab_rect.max.y),
+                                            );
+                                            let tab_sense = ui.interact(body_rect, ui.make_persistent_id(("tab-hit", i)), egui::Sense::click());
+                                            if tab_sense.clicked() {
+                                                to_select = Some(i);
+                                            }
+                                            if tab_sense.middle_clicked() {
+                                                to_close = Some(i);
+                                            }
+                                            let mut close_others = false;
+                                            let mut copy_path: Option<String> = None;
+                                            tab_sense.context_menu(|ui| {
+                                                if ui.button("Đóng tab này").clicked() {
+                                                    to_close = Some(i);
+                                                    ui.close_menu();
+                                                }
+                                                if ui.button("Đóng các tab khác").clicked() {
+                                                    close_others = true;
+                                                    ui.close_menu();
+                                                }
+                                                if let Some(fp) = &full_name {
+                                                    if ui.button("Sao chép đường dẫn").clicked() {
+                                                        copy_path = Some(fp.clone());
+                                                        ui.close_menu();
+                                                    }
+                                                }
+                                            });
+                                            if let Some(fp) = copy_path {
+                                                ctx.copy_text(fp);
+                                                self.status = "Đã sao chép đường dẫn tệp.".into();
+                                            }
+                                            if close_others {
+                                                let keep_id = self.docs[i].id;
+                                                self.docs.retain(|d| d.id == keep_id || d.dirty());
+                                                self.active = self.docs.iter().position(|d| d.id == keep_id).unwrap_or(0);
+                                                break;
+                                            }
+                                            if selected {
+                                                ui.painter().line_segment(
+                                                    [tab_rect.left_top() + egui::vec2(6.0, 1.0), tab_rect.right_top() + egui::vec2(-6.0, 1.0)],
+                                                    egui::Stroke::new(2.5, ac),
+                                                );
+                                            }
+                                        }
+                                        if ibtn_w(ui, "plus", "Tab mới (Ctrl+N)", 0.0, true, false, 26.0).clicked() {
+                                            self.new_doc();
+                                        }
+                                        if let Some(i) = to_select {
+                                            self.active = i;
+                                        }
+                                        if let Some(i) = to_close {
+                                            if self.docs.get(i).map(|d| d.dirty()).unwrap_or(false) {
+                                                self.close_req = Some(CloseReq::Tab(i));
+                                            } else {
+                                                self.close_tab_now(i);
+                                            }
+                                        }
+                                    });
+                                });
+                        },
+                    );
+
+                    // Cum dieu khien ben phai
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // nut Tap trung (Zen)
-                        let ztip = if self.zen_mode { "Thoát chế độ Tập trung (Zen)" } else { "Chế độ Tập trung / Zen (ẩn thanh công cụ & mục lục)" };
-                        if ibtn(ui, "maximize", ztip, 185.0, true, self.zen_mode).clicked() {
+                        let ztip = if self.zen_mode { "Thoát chế độ Tập trung (Zen)" } else { "Chế độ Tập trung / Zen" };
+                        if ibtn(ui, "maximize", ztip, 0.0, true, self.zen_mode).clicked() {
                             self.zen_mode = !self.zen_mode;
                         }
-                        // nut sang / toi
-                        let (icon, tip) = if dark { ("sun", "Chuyển sang giao diện sáng") } else { ("moon", "Chuyển sang giao diện tối") };
-                        if ibtn(ui, icon, tip, if dark { 45.0 } else { 255.0 }, true, false).clicked() {
+                        let (icon, tip) = if dark { ("sun", "Chuyển sang chế độ Sáng") } else { ("moon", "Chuyển sang chế độ Tối") };
+                        if ibtn(ui, icon, tip, 0.0, true, false).clicked() {
                             self.dark = !self.dark;
                             apply_theme(ctx, self.dark);
                             self.persist_session();
                         }
-                        // chon 4 mau chu dao ngay tren thanh dinh
                         let mut picked_accent: Option<usize> = None;
-                        icon_menu(ui, "palette", "Đổi màu chủ đạo", 265.0, |ui| {
+                        icon_menu(ui, "palette", "Đổi màu chủ đạo & Hiển thị", 0.0, |ui| {
                             ui.label(RichText::new("Màu chủ đạo").small().color(ui.visuals().weak_text_color()));
                             for (i, (name, light_c, bright_c)) in ACCENTS.iter().enumerate() {
                                 let c = if dark { *bright_c } else { *light_c };
@@ -930,20 +1092,21 @@ impl App {
                                     picked_accent = Some(i);
                                 }
                             }
+                            ui.separator();
+                            if ui.button(if self.ribbon_open { "Ẩn thanh công cụ" } else { "Hiện thanh công cụ" }).clicked() {
+                                self.ribbon_open = !self.ribbon_open;
+                            }
+                            if ui.button(if self.show_toc { "Ẩn thanh bên" } else { "Hiện thanh bên" }).clicked() {
+                                self.show_toc = !self.show_toc;
+                            }
                         });
                         if let Some(i) = picked_accent {
                             set_accent_index(i);
                             apply_theme(ctx, self.dark);
                             self.persist_session();
                         }
-                        // bang lenh nhanh Ctrl+Shift+P
-                        if ibtn(ui, "search", "Bảng lệnh nhanh (Ctrl+Shift+P)", 215.0, true, self.cmd_open).clicked() {
-                            self.cmd_open = !self.cmd_open;
-                            self.cmd_query.clear();
-                        }
                         ui.add_space(4.0);
-                        // che do xem (phan doan): them theo thu tu phai -> trai, nen nen duoc ve sau cung
-                        let compact = wide < 1080.0;
+                        // Segmented control: Soan thao | Xem truoc | Chia doi
                         let bg_idx = ui.painter().add(egui::Shape::Noop);
                         let mut union = egui::Rect::NOTHING;
                         for (mode, icon, label, tip) in [
@@ -957,438 +1120,199 @@ impl App {
                                 self.view = mode;
                             }
                         }
-                        ui.painter().set(bg_idx, egui::Shape::rect_filled(union.expand(3.0), egui::Rounding::same(11.0), if dark { rgb(13, 16, 24) } else { rgb(228, 235, 246) }));
+                        ui.painter().set(
+                            bg_idx,
+                            egui::Shape::rect_filled(union.expand(2.5), egui::Rounding::same(9.0), chrome_fill(dark)),
+                        );
+                        ui.add_space(4.0);
+                        if ibtn(ui, "search", "Bảng lệnh nhanh (Ctrl+Shift+P)", 0.0, true, self.cmd_open).clicked() {
+                            self.cmd_open = !self.cmd_open;
+                            self.cmd_query.clear();
+                        }
                     });
                 });
             });
 
-        // ---- hang 2: nut bieu tuong cua tab (nho gon, khong ten, tooltip khi re chuot) ----
+        // ---- HANG 2 (THANH CONG CU HOP NHAT): Tep + Xuat (Word/PDF/MD/HTML/In) + Dinh dang + Chen + Cong cu ----
         if !self.ribbon_open || self.zen_mode {
             return;
         }
-        egui::TopBottomPanel::top("ribbon-body")
-            .frame(egui::Frame::default().fill(chrome_fill(dark)).stroke(egui::Stroke::new(1.0, border_color(dark))).inner_margin(egui::Margin::symmetric(12.0, 4.0)))
+        egui::TopBottomPanel::top("unified-toolbar")
+            .frame(
+                egui::Frame::default()
+                    .fill(chrome_fill(dark))
+                    .stroke(egui::Stroke::new(1.0, border_color(dark)))
+                    .inner_margin(egui::Margin::symmetric(10.0, 3.0)),
+            )
             .show(ctx, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
-                    match self.ribbon {
-                        RibbonTab::File => self.ribbon_file(ui, ctx),
-                        RibbonTab::Format => self.ribbon_format(ui),
-                        RibbonTab::Insert => self.ribbon_insert(ui),
-                        RibbonTab::View => self.ribbon_view(ui, ctx),
-                        RibbonTab::Export => self.ribbon_export(ui, ctx),
-                        RibbonTab::Tools => self.ribbon_tools(ui),
-                        RibbonTab::Help => self.ribbon_help(ui, ctx),
+
+                    // Nhom 1: Tep (Menu tep + Luu + Gan day)
+                    let mut file_act: u8 = 0;
+                    icon_menu(ui, "folder-open", "Tệp (Mới, Mở, Mở thư mục, Lưu thành…)", 0.0, |ui| {
+                        if ui.button("Tài liệu mới (Ctrl+N)").clicked() { file_act = 1; }
+                        if ui.button("Mở file… (Ctrl+O)").clicked() { file_act = 2; }
+                        if ui.button("Mở thư mục…").clicked() { file_act = 3; }
+                        if ui.add_enabled(!self.closed.is_empty(), egui::Button::new("Mở lại tab đã đóng (Ctrl+Shift+T)")).clicked() { file_act = 4; }
+                        ui.separator();
+                        if ui.button("Lưu thành… (Ctrl+Shift+S)").clicked() { file_act = 5; }
+                        if ui.button("Lưu tất cả tab").clicked() { file_act = 6; }
+                        ui.separator();
+                        if ui.button("Thoát ứng dụng").clicked() { file_act = 7; }
+                    });
+                    match file_act {
+                        1 => self.new_doc(),
+                        2 => self.open_dialog_files(),
+                        3 => {
+                            if let Some(d) = rfd::FileDialog::new().set_title("Chọn thư mục").pick_folder() {
+                                self.open_path(&d);
+                            }
+                        }
+                        4 => self.reopen_closed(),
+                        5 => { self.save_doc(self.active, true); }
+                        6 => {
+                            let idxs: Vec<usize> = (0..self.docs.len()).filter(|&i| self.docs[i].dirty()).collect();
+                            let n = idxs.len();
+                            for i in idxs { self.save_doc(i, false); }
+                            self.status = format!("Đã lưu {n} tab.");
+                        }
+                        7 => self.request_exit(ctx),
+                        _ => {}
                     }
-                });
-            });
-    }
-
-    fn ribbon_file(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        if ibtn(ui, "file-plus", "Tài liệu mới (Ctrl+N)", 215.0, true, false).clicked() {
-            self.new_doc();
-        }
-        if ibtn(ui, "folder-open", "Mở file… (Ctrl+O, chọn được nhiều file)", 215.0, true, false).clicked() {
-            self.open_dialog_files();
-        }
-        if ibtn(ui, "folder", "Mở thư mục… (mọi file Markdown trong thư mục)", 215.0, true, false).clicked() {
-            if let Some(d) = rfd::FileDialog::new().set_title("Chọn thư mục").pick_folder() {
-                self.open_path(&d);
-            }
-        }
-        if ibtn(ui, "undo", "Mở lại tab đã đóng (Ctrl+Shift+T)", 28.0, !self.closed.is_empty(), false).clicked() {
-            self.reopen_closed();
-        }
-        // ---- Tep gan day ----
-        let recent = self.recent.clone();
-        let mut open: Option<String> = None;
-        let mut clear = false;
-        icon_menu(ui, "clock", &format!("Tệp gần đây ({})", recent.len()), 185.0, |ui| {
-            ui.set_min_width(300.0);
-            if recent.is_empty() {
-                ui.label("Chưa có tệp nào được mở gần đây.");
-            }
-            for p in &recent {
-                let exists = Path::new(p).exists();
-                let name = short_name(p, 40);
-                let dir = Path::new(p).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
-                let r = ui.add(egui::Button::new(RichText::new(name).color(if exists { ui.visuals().text_color() } else { ui.visuals().weak_text_color() })).frame(false));
-                if r.on_hover_text(format!("{dir}{}", if exists { "" } else { "\n(tệp không còn tồn tại)" })).clicked() {
-                    open = Some(p.clone());
-                }
-            }
-            if !recent.is_empty() {
-                ui.separator();
-                if ui.button("Xoá danh sách gần đây").clicked() {
-                    clear = true;
-                }
-            }
-        });
-        if clear {
-            self.recent.clear();
-            self.persist_session();
-        }
-        if let Some(p) = open {
-            self.open_recent(&p);
-        }
-        vsep(ui);
-        // Cum nut Xuat nhanh (Word, PDF, MD, HTML, Print) dat ngay canh Tep mo gan day
-        if ibtn(ui, "word", "Xuất Word (.docx) — có ảnh, bảng, công thức OMML", 215.0, true, false).clicked() {
-            self.export_docx();
-        }
-        if ibtn(ui, "pdf", "Xuất PDF (.pdf)", 350.0, true, false).clicked() {
-            self.export_pdf(ctx);
-        }
-        if ibtn(ui, "md", "Xuất Markdown (.md)", 265.0, true, false).clicked() {
-            self.export_md();
-        }
-        if ibtn(ui, "globe", "Xuất HTML (.html) độc lập, nhúng ảnh", 185.0, true, false).clicked() {
-            self.export_html();
-        }
-        if ibtn(ui, "printer", "In tài liệu (Ctrl+P)", 28.0, true, false).clicked() {
-            self.export_pdf(ctx);
-        }
-        vsep(ui);
-        if ibtn(ui, "save", "Lưu (Ctrl+S)", 150.0, true, false).clicked() {
-            self.save_doc(self.active, false);
-        }
-        if ibtn(ui, "save-plus", "Lưu thành… (Ctrl+Shift+S)", 150.0, true, false).clicked() {
-            self.save_doc(self.active, true);
-        }
-        if ibtn(ui, "layers", "Lưu tất cả tab đang có thay đổi", 150.0, true, false).clicked() {
-            let idxs: Vec<usize> = (0..self.docs.len()).filter(|&i| self.docs[i].dirty()).collect();
-            let n = idxs.len();
-            for i in idxs {
-                self.save_doc(i, false);
-            }
-            self.status = format!("Đã lưu {n} tab.");
-        }
-        vsep(ui);
-        if ibtn(ui, "x", "Đóng tab (Ctrl+W)", 350.0, true, false).clicked() {
-            let idx = self.active;
-            if self.docs.get(idx).map(|d| d.dirty()).unwrap_or(false) {
-                self.close_req = Some(CloseReq::Tab(idx));
-            } else {
-                self.close_tab_now(idx);
-            }
-        }
-        if ibtn(ui, "power", "Thoát ứng dụng", 350.0, true, false).clicked() {
-            self.request_exit(ctx);
-        }
-    }
-
-    fn ribbon_format(&mut self, ui: &mut egui::Ui) {
-        let mut kind: Option<FmtKind> = None;
-        if ibtn(ui, "bold", "Đậm (Ctrl+B)", 215.0, true, false).clicked() { kind = Some(FmtKind::Bold); }
-        if ibtn(ui, "italic", "Nghiêng (Ctrl+I)", 215.0, true, false).clicked() { kind = Some(FmtKind::Italic); }
-        if ibtn(ui, "strike", "Gạch ngang chữ", 215.0, true, false).clicked() { kind = Some(FmtKind::Strike); }
-        if ibtn(ui, "code", "Mã trong dòng", 215.0, true, false).clicked() { kind = Some(FmtKind::Code); }
-        let mut case: Option<CaseMode> = None;
-        icon_menu(ui, "text:Aa", "Đổi kiểu chữ cho đoạn đang bôi chọn", 215.0, |ui| {
-            if ui.button("CHỮ HOA").clicked() { case = Some(CaseMode::Upper); }
-            if ui.button("chữ thường").clicked() { case = Some(CaseMode::Lower); }
-            if ui.button("Chữ Hoa Đầu Từ").clicked() { case = Some(CaseMode::Title); }
-        });
-        vsep(ui);
-        icon_menu(ui, "heading", "Tiêu đề", 265.0, |ui| {
-            if ui.button("Tiêu đề 1").clicked() { kind = Some(FmtKind::H1); }
-            if ui.button("Tiêu đề 2").clicked() { kind = Some(FmtKind::H2); }
-            if ui.button("Tiêu đề 3").clicked() { kind = Some(FmtKind::H3); }
-        });
-        if ibtn(ui, "list", "Danh sách chấm", 265.0, true, false).clicked() { kind = Some(FmtKind::Bullet); }
-        if ibtn(ui, "list-num", "Danh sách đánh số", 265.0, true, false).clicked() { kind = Some(FmtKind::Numbered); }
-        if ibtn(ui, "check", "Danh sách việc cần làm (task list)", 265.0, true, false).clicked() { kind = Some(FmtKind::Task); }
-        if ibtn(ui, "quote", "Trích dẫn", 265.0, true, false).clicked() { kind = Some(FmtKind::Quote); }
-        if let Some(m) = case {
-            self.change_case(m);
-        }
-        if let Some(k) = kind {
-            self.ensure_editable();
-            self.fmt(k);
-        }
-    }
-
-    fn ribbon_insert(&mut self, ui: &mut egui::Ui) {
-        if ibtn(ui, "link", "Chèn liên kết (Ctrl+K)", 185.0, true, false).clicked() {
-            self.ensure_editable();
-            self.fmt(FmtKind::Link);
-        }
-        if ibtn(ui, "image", "Chèn cú pháp ảnh ![mô tả](đường-dẫn)", 185.0, true, false).clicked() {
-            self.ensure_editable();
-            self.fmt(FmtKind::Image);
-        }
-        if ibtn(ui, "image-plus", "Chọn ảnh từ máy và chèn đường dẫn", 185.0, true, false).clicked() {
-            self.insert_image_from_disk();
-        }
-        if ibtn(ui, "table", "Chèn bảng mẫu", 185.0, true, false).clicked() {
-            self.ensure_editable();
-            self.fmt(FmtKind::Table);
-        }
-        if ibtn(ui, "codeblock", "Chèn khối mã", 185.0, true, false).clicked() {
-            self.ensure_editable();
-            self.fmt(FmtKind::Fence);
-        }
-        if ibtn(ui, "minus", "Đường kẻ ngang", 185.0, true, false).clicked() {
-            self.ensure_editable();
-            self.fmt(FmtKind::Hr);
-        }
-        vsep(ui);
-        if ibtn(ui, "sigma", "Công thức trong dòng $…$ (bọc đoạn đang chọn)", 28.0, true, false).clicked() {
-            self.wrap_selection("$", "$", "x^2");
-        }
-        if ibtn(ui, "sigma-block", "Công thức riêng dòng $$…$$", 28.0, true, false).clicked() {
-            self.wrap_selection("\n$$\n", "\n$$\n", "E = mc^2");
-        }
-        let mut snippet: Option<String> = None;
-        icon_menu(ui, "grid", "Mẫu công thức", 28.0, |ui| {
-            ui.set_min_width(220.0);
-            for (name, tpl) in MATH_TEMPLATES {
-                if ui.button(*name).clicked() {
-                    snippet = Some((*tpl).to_string());
-                }
-            }
-        });
-        icon_menu_keep(ui, "omega", "Bảng ký hiệu toán học", 28.0, |ui| {
-            ui.set_max_width(300.0);
-            for (grp, items) in SYMBOLS {
-                ui.label(RichText::new(*grp).small().color(ui.visuals().weak_text_color()));
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
-                    for s in *items {
-                        if ui.add(egui::Button::new(RichText::new(*s).size(15.0)).min_size(egui::vec2(28.0, 26.0))).clicked() {
-                            snippet = Some((*s).to_string());
-                        }
+                    if ibtn(ui, "save", "Lưu (Ctrl+S)", 0.0, true, false).clicked() {
+                        self.save_doc(self.active, false);
                     }
-                });
-            }
-        });
-        if let Some(s) = snippet {
-            self.insert_snippet(&s);
-        }
-        vsep(ui);
-        if ibtn(ui, "toc", "Chèn mục lục tự động từ các tiêu đề", 330.0, true, false).clicked() {
-            self.insert_toc();
-        }
-        if ibtn(ui, "asterisk", "Chèn chú thích cuối trang [^1]", 330.0, true, false).clicked() {
-            self.insert_snippet("[^⟦1⟧]\n\n[^1]: Nội dung chú thích.\n");
-        }
-        if ibtn(ui, "calendar", "Chèn ngày hôm nay", 330.0, true, false).clicked() {
-            let d = docx_today();
-            self.insert_snippet(&d);
-        }
-    }
-
-    fn ribbon_view(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        if ibtn(ui, "sidebar", "Hiện / ẩn mục lục bên trái", 215.0, true, self.show_toc).clicked() {
-            self.show_toc = !self.show_toc;
-        }
-        vsep(ui);
-        if ibtn(ui, "zoomout", "Thu nhỏ (Ctrl+-)", 150.0, true, false).clicked() {
-            let z = self.zoom - 0.1;
-            self.set_zoom(ctx, z);
-        }
-        if ibtn_w(ui, &format!("text:{:.0}%", self.zoom * 100.0), "Đặt lại 100% (Ctrl+0)", 150.0, true, false, 50.0).clicked() {
-            self.set_zoom(ctx, 1.0);
-        }
-        if ibtn(ui, "zoomin", "Phóng to (Ctrl++)", 150.0, true, false).clicked() {
-            let z = self.zoom + 0.1;
-            self.set_zoom(ctx, z);
-        }
-        vsep(ui);
-        let tip = if self.fullscreen { "Thoát toàn màn hình (F11)" } else { "Toàn màn hình (F11)" };
-        if ibtn(ui, "maximize", tip, 28.0, true, self.fullscreen).clicked() {
-            self.fullscreen = !self.fullscreen;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
-        }
-    }
-
-    fn ribbon_export(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        if ibtn(ui, "word", "Xuất Word (.docx): có ảnh, bảng, công thức Equation sửa được trong Word", 215.0, true, false).clicked() {
-            self.export_docx();
-        }
-        if ibtn(ui, "globe", "Xuất HTML độc lập: ảnh nhúng sẵn, công thức MathML", 185.0, true, false).clicked() {
-            self.export_html();
-        }
-        if ibtn(ui, "printer", "PDF / In (Ctrl+P): mở trình duyệt, chọn \"Lưu thành PDF\"", 28.0, true, false).clicked() {
-            self.export_pdf(ctx);
-        }
-        if ibtn(ui, "txt", "Xuất văn bản thuần (.txt), bỏ ký hiệu Markdown", 265.0, true, false).clicked() {
-            self.export_txt();
-        }
-        vsep(ui);
-        if ibtn(ui, "codeblock", "Sao chép mã HTML vào clipboard", 150.0, true, false).clicked() {
-            self.copy_html(ctx);
-        }
-        if ibtn(ui, "copy", "Sao chép toàn bộ Markdown nguồn", 150.0, true, false).clicked() {
-            if let Some(d) = self.docs.get(self.active) {
-                ctx.copy_text(d.text.clone());
-                self.status = "Đã sao chép toàn bộ nội dung.".into();
-            }
-        }
-    }
-
-    fn ribbon_tools(&mut self, ui: &mut egui::Ui) {
-        if ibtn(ui, "wand", "Sửa lỗi trình bày & font… (Ctrl+Shift+F): chữ vỡ mã, font cũ TCVN3/VNI, ký tự MathType, dấu công thức, bảng, danh sách", 330.0, true, false).clicked() {
-            self.open_fixer();
-        }
-        if ibtn(ui, "bolt", "Sửa nhanh: áp dụng ngay bộ sửa lỗi khuyến nghị", 45.0, true, false).clicked() {
-            self.quick_fix();
-        }
-        if ibtn(ui, "undo", "Hoàn tác lần sửa lỗi gần nhất", 28.0, self.fx_undo.is_some(), false).clicked() {
-            self.undo_fix();
-        }
-        vsep(ui);
-        if ibtn(ui, "check-circle", "Kiểm tra công thức: lệnh sai, ngoặc thiếu, dấu $ lẻ", 150.0, true, false).clicked() {
-            self.run_formula_check();
-        }
-        if ibtn(ui, "align", "Căn chỉnh bảng tại vị trí con trỏ", 215.0, true, false).clicked() {
-            self.format_table();
-        }
-        if ibtn(ui, "chart", "Thống kê: từ, ký tự, tiêu đề, bảng, công thức…", 265.0, true, false).clicked() {
-            self.dialog = Some(Dialog::Stats);
-        }
-        vsep(ui);
-        if ibtn(ui, "search", "Tìm / Thay thế (Ctrl+F)", 185.0, true, self.find_open).clicked() {
-            self.find_open = !self.find_open;
-        }
-        if ibtn(ui, "refresh", if self.autosave { "Tự động lưu mỗi 30 giây: đang BẬT" } else { "Tự động lưu mỗi 30 giây: đang tắt (bấm để bật)" }, 150.0, true, self.autosave).clicked() {
-            self.autosave = !self.autosave;
-            self.persist_session();
-        }
-    }
-
-    fn ribbon_help(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        if ibtn(ui, "keyboard", "Phím tắt (F1)", 215.0, true, false).clicked() {
-            self.dialog = Some(Dialog::Shortcuts);
-        }
-        if ibtn(ui, "book", "Cú pháp Markdown và lệnh LaTeX được hỗ trợ", 265.0, true, false).clicked() {
-            self.dialog = Some(Dialog::Syntax);
-        }
-        if ibtn(ui, "info", "Giới thiệu", 185.0, true, false).clicked() {
-            self.dialog = Some(Dialog::About);
-        }
-        vsep(ui);
-        ui.label(RichText::new("Màu chủ đạo").size(12.5).color(ui.visuals().weak_text_color()));
-        for (i, (name, light, bright)) in ACCENTS.iter().enumerate() {
-            let col = if self.dark { *bright } else { *light };
-            let (rect, resp) = ui.allocate_exact_size(egui::vec2(26.0, 28.0), egui::Sense::click());
-            let c = egui::Rect::from_center_size(rect.center(), egui::vec2(20.0, 20.0));
-            ui.painter().circle_filled(c.center(), 9.0, col);
-            if accent_index() == i {
-                ui.painter().circle_stroke(c.center(), 12.0, egui::Stroke::new(2.0, ui.visuals().text_color()));
-            } else if resp.hovered() {
-                ui.painter().circle_stroke(c.center(), 12.0, egui::Stroke::new(1.5, ui.visuals().weak_text_color()));
-            }
-            if resp.on_hover_text(format!("Màu chủ đạo: {name}")).clicked() {
-                set_accent_index(i);
-                apply_theme(ctx, self.dark);
-                self.persist_session();
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- thanh tab tai lieu
-    pub fn ui_tabbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("tabbar")
-            .frame(egui::Frame::default().fill(tabstrip_fill(self.dark)).inner_margin(egui::Margin::symmetric(8.0, 5.0)))
-            .show(ctx, |ui| {
-                egui::ScrollArea::horizontal().id_salt("tabs-scroll").auto_shrink([false, true]).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        let mut to_close: Option<usize> = None;
-                        let mut to_select: Option<usize> = None;
-                        for i in 0..self.docs.len() {
-                            let doc = &self.docs[i];
-                            let base = doc.path.as_ref().and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned())).unwrap_or_else(|| "Tài liệu mới".into());
-                            let dirty = doc.dirty();
-                            let selected = i == self.active;
-                            let full_name = doc.path.as_ref().map(|p| p.display().to_string());
-                            let base = if base.chars().count() > 28 { format!("{}…", base.chars().take(27).collect::<String>()) } else { base };
-                            let frame = egui::Frame::default()
-                                .fill(if selected { ui.visuals().panel_fill } else { Color32::TRANSPARENT })
-                                .rounding(egui::Rounding { nw: 9.0, ne: 9.0, sw: 0.0, se: 0.0 })
-                                .inner_margin(egui::Margin::symmetric(10.0, 4.0));
-                            let tab_out = frame.show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 6.0;
-                                    let (ir, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
-                                    let hues = [215.0, 150.0, 28.0, 265.0, 330.0, 185.0];
-                                    icons::paint(ui.painter(), ir, "file", hue_color(hues[i % hues.len()], self.dark));
-                                    if dirty {
-                                        let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                                        ui.painter().circle_filled(dot.center(), 3.5, AMBER);
-                                    }
-                                    let mut txt = RichText::new(&base).size(13.5);
-                                    if selected {
-                                        txt = txt.strong().color(ui.visuals().text_color());
-                                    }
-                                    let lab = ui.add(egui::Label::new(txt).sense(egui::Sense::click()));
-                                    let lab = match &full_name {
-                                        Some(f) => lab.on_hover_text(f),
-                                        None => lab,
-                                    };
-                                    if lab.clicked() {
-                                        to_select = Some(i);
-                                    }
-                                    if ui.add(egui::Button::new(RichText::new("×").size(14.0)).frame(false).min_size(egui::vec2(20.0, 20.0))).on_hover_text("Đóng tab (Ctrl+W)").clicked() {
-                                        to_close = Some(i);
-                                    }
-                                });
-                            });
-                            let tab_rect = tab_out.response.rect;
-                            let tab_sense = ui.interact(tab_rect, ui.make_persistent_id(("tab-hit", i)), egui::Sense::click());
-                            if tab_sense.middle_clicked() {
-                                to_close = Some(i);
-                            }
-                            let mut close_others = false;
-                            let mut copy_path: Option<String> = None;
-                            tab_sense.context_menu(|ui| {
-                                if ui.button("Đóng tab này").clicked() {
-                                    to_close = Some(i);
-                                    ui.close_menu();
-                                }
-                                if ui.button("Đóng các tab khác").clicked() {
-                                    close_others = true;
-                                    ui.close_menu();
-                                }
-                                if let Some(fp) = &full_name {
-                                    if ui.button("Sao chép đường dẫn").clicked() {
-                                        copy_path = Some(fp.clone());
-                                        ui.close_menu();
-                                    }
-                                }
-                            });
-                            if let Some(fp) = copy_path {
-                                ctx.copy_text(fp);
-                                self.status = "Đã sao chép đường dẫn tệp.".into();
-                            }
-                            if close_others {
-                                let keep_id = self.docs[i].id;
-                                self.docs.retain(|d| d.id == keep_id || d.dirty());
-                                self.active = self.docs.iter().position(|d| d.id == keep_id).unwrap_or(0);
-                                break;
-                            }
-                            if selected {
-                                ui.painter().line_segment(
-                                    [tab_rect.left_top() + egui::vec2(6.0, 1.0), tab_rect.right_top() + egui::vec2(-6.0, 1.0)],
-                                    egui::Stroke::new(2.5, accent(self.dark)),
-                                );
+                    let recent = self.recent.clone();
+                    let mut open_rec: Option<String> = None;
+                    let mut clear_rec = false;
+                    icon_menu(ui, "clock", &format!("Tệp mở gần đây ({})", recent.len()), 0.0, |ui| {
+                        ui.set_min_width(280.0);
+                        if recent.is_empty() {
+                            ui.label("Chưa có tệp nào được mở gần đây.");
+                        }
+                        for p in &recent {
+                            let exists = Path::new(p).exists();
+                            let name = short_name(p, 38);
+                            let r = ui.add(egui::Button::new(RichText::new(name).color(if exists { ui.visuals().text_color() } else { ui.visuals().weak_text_color() })).frame(false));
+                            if r.on_hover_text(p).clicked() {
+                                open_rec = Some(p.clone());
                             }
                         }
-                        if ibtn_w(ui, "plus", "Tab mới (Ctrl+N)", 215.0, true, false, 28.0).clicked() {
-                            self.new_doc();
-                        }
-                        if let Some(i) = to_select {
-                            self.active = i;
-                        }
-                        if let Some(i) = to_close {
-                            if self.docs.get(i).map(|d| d.dirty()).unwrap_or(false) {
-                                self.close_req = Some(CloseReq::Tab(i));
-                            } else {
-                                self.close_tab_now(i);
-                            }
+                        if !recent.is_empty() {
+                            ui.separator();
+                            if ui.button("Xoá danh sách gần đây").clicked() { clear_rec = true; }
                         }
                     });
+                    if clear_rec { self.recent.clear(); self.persist_session(); }
+                    if let Some(p) = open_rec { self.open_recent(&p); }
+
+                    vsep(ui);
+
+                    // Nhom 2: 5 nut Xuat nhanh (Word, PDF, MD, HTML, Print) ngay canh Tep mo gan day
+                    if ibtn(ui, "word", "Xuất Word (.docx) — có ảnh, bảng, công thức OMML", 0.0, true, false).clicked() {
+                        self.export_docx();
+                    }
+                    if ibtn(ui, "pdf", "Xuất PDF (.pdf)", 0.0, true, false).clicked() {
+                        self.export_pdf(ctx);
+                    }
+                    if ibtn(ui, "md", "Xuất Markdown (.md)", 0.0, true, false).clicked() {
+                        self.export_md();
+                    }
+                    if ibtn(ui, "globe", "Xuất HTML (.html) độc lập, nhúng ảnh", 0.0, true, false).clicked() {
+                        self.export_html();
+                    }
+                    if ibtn(ui, "printer", "In tài liệu (Ctrl+P)", 0.0, true, false).clicked() {
+                        self.export_pdf(ctx);
+                    }
+
+                    vsep(ui);
+
+                    // Nhom 3: Dinh dang (B, I, </>, H ▾, Danh sach, Trich dan)
+                    let mut kind: Option<FmtKind> = None;
+                    if ibtn(ui, "bold", "Đậm (Ctrl+B)", 0.0, true, false).clicked() { kind = Some(FmtKind::Bold); }
+                    if ibtn(ui, "italic", "Nghiêng (Ctrl+I)", 0.0, true, false).clicked() { kind = Some(FmtKind::Italic); }
+                    if ibtn(ui, "code", "Mã trong dòng", 0.0, true, false).clicked() { kind = Some(FmtKind::Code); }
+                    icon_menu(ui, "heading", "Tiêu đề (H1–H3)", 0.0, |ui| {
+                        if ui.button("Tiêu đề 1 (#)").clicked() { kind = Some(FmtKind::H1); }
+                        if ui.button("Tiêu đề 2 (##)").clicked() { kind = Some(FmtKind::H2); }
+                        if ui.button("Tiêu đề 3 (###)").clicked() { kind = Some(FmtKind::H3); }
+                    });
+                    if ibtn(ui, "list", "Danh sách chấm", 0.0, true, false).clicked() { kind = Some(FmtKind::Bullet); }
+                    if ibtn(ui, "quote", "Trích dẫn", 0.0, true, false).clicked() { kind = Some(FmtKind::Quote); }
+
+                    vsep(ui);
+
+                    // Nhom 4: Chen (Bang, $x$, $$, Mau cong thuc & Chen khac ▾)
+                    if ibtn(ui, "table", "Chèn bảng", 0.0, true, false).clicked() { kind = Some(FmtKind::Table); }
+                    if ibtn_w(ui, "text:$x$", "Công thức trong dòng $…$", 0.0, true, false, 36.0).clicked() {
+                        self.wrap_selection("$", "$", "x^2");
+                    }
+                    if ibtn_w(ui, "text:$$", "Công thức riêng dòng $$…$$", 0.0, true, false, 34.0).clicked() {
+                        self.wrap_selection("\n$$\n", "\n$$\n", "E = mc^2");
+                    }
+                    let mut snippet: Option<String> = None;
+                    let mut ins_act: u8 = 0;
+                    icon_menu(ui, "sigma", "Mẫu công thức & Chèn thêm (Ảnh, Liên kết, Mục lục…)", 0.0, |ui| {
+                        ui.set_min_width(220.0);
+                        ui.label(RichText::new("Mẫu công thức").small().color(ui.visuals().weak_text_color()));
+                        for (name, tpl) in MATH_TEMPLATES {
+                            if ui.button(*name).clicked() { snippet = Some((*tpl).to_string()); }
+                        }
+                        ui.separator();
+                        if ui.button("Chèn liên kết (Ctrl+K)").clicked() { kind = Some(FmtKind::Link); }
+                        if ui.button("Chọn ảnh từ máy…").clicked() { ins_act = 1; }
+                        if ui.button("Chèn khối mã").clicked() { kind = Some(FmtKind::Fence); }
+                        if ui.button("Chèn mục lục tự động").clicked() { ins_act = 2; }
+                        if ui.button("Chèn ngày hôm nay").clicked() { ins_act = 3; }
+                    });
+                    if let Some(s) = snippet { self.insert_snippet(&s); }
+                    match ins_act {
+                        1 => self.insert_image_from_disk(),
+                        2 => self.insert_toc(),
+                        3 => { let d = docx_today(); self.insert_snippet(&d); }
+                        _ => {}
+                    }
+                    if let Some(k) = kind {
+                        self.ensure_editable();
+                        self.fmt(k);
+                    }
+
+                    vsep(ui);
+
+                    // Nhom 5: Tim kiem, Sua loi & Cong cu khac ▾
+                    if ibtn(ui, "search", "Tìm / Thay thế (Ctrl+F)", 0.0, true, self.find_open).clicked() {
+                        self.find_open = !self.find_open;
+                    }
+                    if ibtn(ui, "wand", "Sửa lỗi trình bày & font… (Ctrl+Shift+F)", 0.0, true, false).clicked() {
+                        self.open_fixer();
+                    }
+                    let mut tool_act: u8 = 0;
+                    icon_menu(ui, "grid", "Công cụ khác & Trợ giúp", 0.0, |ui| {
+                        ui.set_min_width(210.0);
+                        if ui.button("Sửa nhanh khuyến nghị").clicked() { tool_act = 1; }
+                        if ui.add_enabled(self.fx_undo.is_some(), egui::Button::new("Hoàn tác lần sửa")).clicked() { tool_act = 2; }
+                        if ui.button("Kiểm tra công thức…").clicked() { tool_act = 3; }
+                        if ui.button("Căn chỉnh bảng").clicked() { tool_act = 4; }
+                        if ui.button("Thống kê tài liệu…").clicked() { tool_act = 5; }
+                        if ui.button(if self.autosave { "✓ Tự động lưu (30s): Đang BẬT" } else { "Tự động lưu (30s): Đang tắt" }).clicked() { tool_act = 6; }
+                        ui.separator();
+                        if ui.button("Phím tắt (F1)").clicked() { tool_act = 7; }
+                        if ui.button("Cú pháp Markdown & LaTeX").clicked() { tool_act = 8; }
+                        if ui.button("Giới thiệu").clicked() { tool_act = 9; }
+                    });
+                    match tool_act {
+                        1 => self.quick_fix(),
+                        2 => self.undo_fix(),
+                        3 => self.run_formula_check(),
+                        4 => self.format_table(),
+                        5 => self.dialog = Some(Dialog::Stats),
+                        6 => { self.autosave = !self.autosave; self.persist_session(); }
+                        7 => self.dialog = Some(Dialog::Shortcuts),
+                        8 => self.dialog = Some(Dialog::Syntax),
+                        9 => self.dialog = Some(Dialog::About),
+                        _ => {}
+                    }
                 });
             });
     }
@@ -1399,8 +1323,20 @@ impl App {
         let mut open: Option<String> = None;
         let mut act: u8 = 0;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.add_space(36.0);
+            ui.add_space(28.0);
+            let avail = ui.available_width();
+            let card_w = (avail - 40.0).clamp(320.0, 620.0);
+            let pad_x = ((avail - card_w) / 2.0).max(8.0);
+            ui.horizontal_top(|ui| {
+                ui.add_space(pad_x);
+                egui::Frame::default()
+                    .fill(content_fill(self.dark))
+                    .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
+                    .rounding(egui::Rounding::same(12.0))
+                    .inner_margin(egui::Margin::symmetric(28.0, 28.0))
+                    .show(ui, |ui| {
+                        ui.set_width((card_w - 56.0).max(240.0));
+                        ui.vertical_centered(|ui| {
                 ui.label(RichText::new("Markdown Tabs").size(30.0).strong().color(ui.visuals().text_color()));
                 ui.label(RichText::new("Xem, soạn thảo và xuất Markdown — có công thức toán, xuất Word chuẩn.").color(ui.visuals().weak_text_color()));
                 ui.add_space(16.0);
@@ -1436,7 +1372,10 @@ impl App {
                         ui.add(egui::Label::new(RichText::new(dir).small().color(ui.visuals().weak_text_color())).truncate());
                     });
                 }
+                        });
+                    });
             });
+            ui.add_space(28.0);
         });
         match act {
             1 => self.open_dialog_files(),

@@ -35,7 +35,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 // ------------------------------------------------------------------ consts
 const APP_TITLE: &str = "Markdown Tabs";
-const VERSION: &str = "0.7.0-rust";
+const VERSION: &str = "0.7.2-rust";
 const IPC_PORT: u16 = 47655;
 const IPC_MAGIC: &str = "MDTABS/1";
 const MD_EXTS: &[&str] = &["md", "markdown", "mdown", "mkd", "txt"];
@@ -415,6 +415,7 @@ impl MdParser {
                     self.flush_pending();
                     self.top().blocks.push(Block::Rule)
                 }
+                #[allow(unreachable_patterns)]
                 _ => {}
             }
         }
@@ -1047,6 +1048,10 @@ fn render_blocks(
                                         });
                                     }
                                     ui.end_row();
+                                    for _ in 0..ncols {
+                                        ui.separator();
+                                    }
+                                    ui.end_row();
                                 }
                                 for row in rows {
                                     for (c, cell) in row.iter().enumerate() {
@@ -1166,6 +1171,7 @@ impl Doc {
     fn dirty(&self) -> bool {
         self.text != self.saved_text
     }
+    #[allow(dead_code)]
     fn title(&self) -> String {
         let base = match &self.path {
             Some(p) => p
@@ -1279,7 +1285,7 @@ struct App {
     find_text: String,
     replace_text: String,
     zoom: f32,
-    prev_layout: (u8, bool, egui::Rect),
+    prev_layout: (u8, bool, bool, bool, egui::Rect),
     img_cache: std::collections::HashMap<PathBuf, Option<egui::TextureHandle>>,
     find_goto: Option<(u64, usize, usize)>, // doc_id, from_char, to_char
     toc_goto: Option<(u64, usize)>,         // doc_id, char_offset
@@ -1310,6 +1316,7 @@ struct App {
     cmd_open: bool,
     cmd_query: String,
     toc_filter: String,
+    sidebar_tab: u8,
 }
 
 impl App {
@@ -1328,7 +1335,7 @@ impl App {
             find_text: String::new(),
             replace_text: String::new(),
             zoom: if session.zoom > 0.2 && session.zoom < 4.0 { session.zoom } else { 1.0 },
-            prev_layout: (9, true, egui::Rect::NOTHING),
+            prev_layout: (9, true, false, true, egui::Rect::NOTHING),
             img_cache: std::collections::HashMap::new(),
             find_goto: None,
             toc_goto: None,
@@ -1357,6 +1364,7 @@ impl App {
             cmd_open: false,
             cmd_query: String::new(),
             toc_filter: String::new(),
+            sidebar_tab: 0,
         };
         // (che do kiem thu giao dien) MDT_DARK=1|0, MDT_ACCENT=0..3 ghi de phien da luu
         let dark_now = match std::env::var("MDT_DARK").as_deref() {
@@ -1616,6 +1624,7 @@ pub fn accent_soft(dark: bool) -> Color32 {
 }
 
 /// Mau bieu tuong theo nhom lenh: sac do (0..360) -> mau doc duoc tren nen hien tai.
+#[allow(dead_code)]
 pub fn hue_color(hue: f32, dark: bool) -> Color32 {
     let (s, l) = if dark { (0.85, 0.70) } else { (0.78, 0.40) };
     let c = (1.0 - (2.0 * l - 1.0f32).abs()) * s;
@@ -2186,6 +2195,9 @@ impl App {
         let found = find_from(start).or_else(|| find_from(0));
         match found {
             Some(pos) => {
+                if matches!(self.view, ViewMode::Preview) {
+                    self.view = ViewMode::Split;
+                }
                 let text = doc.text.clone();
                 self.goto_char(ctx, doc_id, pos, pos + nee.len(), &text);
                 if let Some(d) = self.docs.get_mut(self.active) {
@@ -2196,6 +2208,67 @@ impl App {
                 self.status = format!("Không tìm thấy: {}", self.find_text);
             }
         }
+    }
+
+    fn do_find_prev(&mut self, ctx: &egui::Context) {
+        if self.find_text.is_empty() {
+            return;
+        }
+        let Some(doc) = self.docs.get(self.active) else { return };
+        let doc_id = doc.id;
+        let chars: Vec<char> = doc.text.chars().collect();
+        let needle: Vec<char> = self.find_text.chars().collect();
+        if needle.is_empty() || chars.len() < needle.len() {
+            return;
+        }
+        let lower = |c: &char| c.to_lowercase().next().unwrap_or(*c);
+        let hay: Vec<char> = chars.iter().map(|c| lower(c)).collect();
+        let nee: Vec<char> = needle.iter().map(|c| lower(c)).collect();
+        let max_start = hay.len() - nee.len();
+        let cur = doc.cursor_char.min(max_start);
+        let found = (0..cur)
+            .rev()
+            .find(|&i| hay[i..i + nee.len()] == nee[..])
+            .or_else(|| (0..=max_start).rev().find(|&i| hay[i..i + nee.len()] == nee[..]));
+        if let Some(pos) = found {
+            if matches!(self.view, ViewMode::Preview) {
+                self.view = ViewMode::Split;
+            }
+            let text = doc.text.clone();
+            self.goto_char(ctx, doc_id, pos, pos + nee.len(), &text);
+            if let Some(d) = self.docs.get_mut(self.active) {
+                d.cursor_char = pos;
+            }
+        } else {
+            self.status = format!("Không tìm thấy: {}", self.find_text);
+        }
+    }
+
+    fn find_match_count(&self) -> (usize, usize) {
+        if self.find_text.is_empty() {
+            return (0, 0);
+        }
+        let Some(doc) = self.docs.get(self.active) else { return (0, 0) };
+        let hay: Vec<char> = doc.text.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+        let nee: Vec<char> = self.find_text.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+        if nee.is_empty() || hay.len() < nee.len() {
+            return (0, 0);
+        }
+        let mut total = 0usize;
+        let mut cur_idx = 0usize;
+        let mut i = 0usize;
+        while i + nee.len() <= hay.len() {
+            if hay[i..i + nee.len()] == nee[..] {
+                total += 1;
+                if i <= doc.cursor_char {
+                    cur_idx = total;
+                }
+                i += nee.len();
+            } else {
+                i += 1;
+            }
+        }
+        (cur_idx, total)
     }
 
     fn check_external_changes(&mut self) {
@@ -2298,7 +2371,7 @@ impl eframe::App for App {
         // tren Windows (khu vuc panel cu khong con duoc to nen nua).
         {
             let vc: u8 = match self.view { ViewMode::Edit => 0, ViewMode::Preview => 1, ViewMode::Split => 2 };
-            let cur = (vc, self.show_toc, ctx.input(|i| i.screen_rect()));
+            let cur = (vc, self.show_toc, self.zen_mode, self.ribbon_open, ctx.input(|i| i.screen_rect()));
             let changed = cur != self.prev_layout;
             if changed {
                 self.prev_layout = cur;
@@ -2408,13 +2481,19 @@ impl eframe::App for App {
             self.cmd_open = !self.cmd_open;
             self.cmd_query.clear();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.cmd_open {
-            self.cmd_open = false;
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.cmd_open {
+                self.cmd_open = false;
+            } else if self.find_open {
+                self.find_open = false;
+            }
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.ctrl && !i.modifiers.shift) {
+            self.export_pdf(ctx);
         }
 
         // ---- ribbon (File / Dinh dang / Chen / Xem / Xuat / Cong cu / Tro giup) + thanh tab ----
         self.ui_ribbon(ctx);
-        self.ui_tabbar(ctx);
 
         // ---- thanh trang thai 3 vung (v0.7: luon hien Da luu / Chua luu, khong lap duong dan) ----
         if !self.zen_mode {
@@ -2488,36 +2567,42 @@ impl eframe::App for App {
             }
         }
 
-        // ---- thanh tim kiem ----
+        // ---- thanh tim kiem & thay the gọn o phia tren ----
         if self.find_open {
-            egui::TopBottomPanel::bottom("findbar")
+            let (cur_m, tot_m) = self.find_match_count();
+            egui::TopBottomPanel::top("findbar")
                 .frame(
                     egui::Frame::default()
                         .fill(chrome_fill(self.dark))
-                        .inner_margin(egui::Margin::symmetric(10.0, 5.0)),
+                        .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
+                        .inner_margin(egui::Margin::symmetric(12.0, 5.0)),
                 )
                 .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Tìm:");
-                    let resp = ui.add(egui::TextEdit::singleline(&mut self.find_text).desired_width(220.0));
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
+                    ui.label(RichText::new("Tìm:").size(12.5).color(ui.visuals().weak_text_color()));
+                    let resp = ui.add(egui::TextEdit::singleline(&mut self.find_text).hint_text("Nhập từ khóa…").desired_width(180.0));
                     if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         self.do_find_next(ctx);
                     }
-                    if ui.button("Tiếp").clicked() {
+                    ui.label(RichText::new(format!("{cur_m}/{tot_m}")).font(FontId::monospace(12.0)).color(ui.visuals().weak_text_color()));
+                    if ui.button("↑").on_hover_text("Kết quả trước").clicked() {
+                        self.do_find_prev(ctx);
+                    }
+                    if ui.button("↓").on_hover_text("Kết quả tiếp (Enter)").clicked() {
                         self.do_find_next(ctx);
                     }
-                    if ui.button("Đóng").clicked() {
-                        self.find_open = false;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Thay:");
-                    ui.add(egui::TextEdit::singleline(&mut self.replace_text).desired_width(220.0));
-                    if ui.button("Thay thế").clicked() {
+                    vsep(ui);
+                    ui.label(RichText::new("Thay:").size(12.5).color(ui.visuals().weak_text_color()));
+                    ui.add(egui::TextEdit::singleline(&mut self.replace_text).hint_text("Thay bằng…").desired_width(160.0));
+                    if ui.button("Thay").clicked() {
                         self.replace_next(ctx);
                     }
-                    if ui.button("Thay tất cả").clicked() {
+                    if ui.button("Tất cả").clicked() {
                         self.replace_all();
+                    }
+                    if ui.button("×").on_hover_text("Đóng tìm kiếm (Esc)").clicked() {
+                        self.find_open = false;
                     }
                 });
             });
@@ -2537,61 +2622,132 @@ impl eframe::App for App {
                         .inner_margin(egui::Margin::same(10.0)),
                 )
                 .show(ctx, |ui| {
-                    ui.label(
-                        RichText::new("MỤC LỤC")
-                            .font(FontId::new(11.0, egui::FontFamily::Name("InterSemiBold".into())))
-                            .color(ui.visuals().weak_text_color()),
-                    );
-                    ui.add_space(4.0);
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.toc_filter)
-                            .hint_text("Lọc tiêu đề…")
-                            .desired_width(f32::INFINITY),
-                    );
-                    ui.add_space(6.0);
-                    let q = self.toc_filter.trim().to_lowercase();
-                    let mut goto: Option<usize> = None;
-                    if let Some(doc) = self.docs.get(self.active) {
-                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                            if doc.toc.is_empty() {
-                                ui.label(RichText::new("(Chưa có tiêu đề)").color(ui.visuals().weak_text_color()));
+                    ui.horizontal(|ui| {
+                        let ac = accent(self.dark);
+                        for (idx, lbl) in [(0u8, "Mục lục"), (1u8, "Thư mục")] {
+                            let sel = self.sidebar_tab == idx;
+                            let txt = RichText::new(lbl).size(13.0).color(if sel { ac } else { ui.visuals().weak_text_color() });
+                            let txt = if sel { txt.strong() } else { txt };
+                            let r = ui.add(egui::Button::new(txt).frame(false).min_size(egui::vec2(76.0, 26.0)));
+                            if sel {
+                                ui.painter().line_segment(
+                                    [egui::pos2(r.rect.left() + 4.0, r.rect.bottom()), egui::pos2(r.rect.right() - 4.0, r.rect.bottom())],
+                                    egui::Stroke::new(2.0, ac),
+                                );
                             }
-                            for e in &doc.toc {
-                                if !q.is_empty() && !e.title.to_lowercase().contains(&q) {
-                                    continue;
+                            if r.clicked() {
+                                self.sidebar_tab = idx;
+                            }
+                        }
+                    });
+                    ui.separator();
+                    ui.add_space(4.0);
+                    if self.sidebar_tab == 0 {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.toc_filter)
+                                .hint_text("Lọc tiêu đề…")
+                                .desired_width(f32::INFINITY),
+                        );
+                        ui.add_space(6.0);
+                        let q = self.toc_filter.trim().to_lowercase();
+                        let mut goto: Option<usize> = None;
+                        if let Some(doc) = self.docs.get(self.active) {
+                            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                                if doc.toc.is_empty() {
+                                    ui.label(RichText::new("(Chưa có tiêu đề)").color(ui.visuals().weak_text_color()));
                                 }
-                                let indent = (e.level.saturating_sub(1)) as f32 * 14.0;
-                                ui.horizontal(|ui| {
-                                    ui.add_space(indent);
-                                    let mut txt = RichText::new(&e.title).size(13.5);
-                                    if e.level == 1 {
-                                        txt = txt.font(FontId::new(13.5, egui::FontFamily::Name("InterSemiBold".into())));
+                                for e in &doc.toc {
+                                    if !q.is_empty() && !e.title.to_lowercase().contains(&q) {
+                                        continue;
                                     }
-                                    txt = txt.color(ui.visuals().text_color());
-                                    // cat bot tieu de dai thay vi tran ra ngoai panel
-                                    let r = ui.add(egui::Label::new(txt).truncate().sense(egui::Sense::click()));
-                                    let r = r.on_hover_text(&e.title).on_hover_cursor(egui::CursorIcon::PointingHand);
-                                    if r.hovered() {
-                                        ui.painter().rect_stroke(
-                                            r.rect.expand(2.0),
-                                            4.0,
-                                            egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
-                                        );
+                                    let indent = (e.level.saturating_sub(1)) as f32 * 14.0;
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(indent);
+                                        let mut txt = RichText::new(&e.title).size(13.0);
+                                        if e.level == 1 {
+                                            txt = txt.font(FontId::new(13.0, egui::FontFamily::Name("InterSemiBold".into())));
+                                        }
+                                        txt = txt.color(ui.visuals().text_color());
+                                        let r = ui.add(egui::Label::new(txt).truncate().sense(egui::Sense::click()));
+                                        let r = r.on_hover_text(&e.title).on_hover_cursor(egui::CursorIcon::PointingHand);
+                                        if r.hovered() {
+                                            ui.painter().rect_filled(r.rect.expand(2.0), 4.0, accent_soft(self.dark));
+                                        }
+                                        if r.clicked() {
+                                            goto = Some(e.char_offset);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                        if let Some(off) = goto {
+                            if let Some(doc) = self.docs.get(self.active) {
+                                let (doc_id, text) = (doc.id, doc.text.clone());
+                                self.goto_char(ctx, doc_id, off, off, &text);
+                                self.toc_goto = Some((doc_id, off));
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("preview-scroll-target"), off));
+                                ctx.request_repaint();
+                            }
+                        }
+                    } else {
+                        let mut pick_tab: Option<usize> = None;
+                        let mut open_disk: Option<PathBuf> = None;
+                        let active_dir = self.docs.get(self.active)
+                            .and_then(|d| d.path.as_ref())
+                            .and_then(|p| p.parent().map(|x| x.to_path_buf()));
+                        let active_path = self.docs.get(self.active).and_then(|d| d.path.clone());
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            ui.label(RichText::new("ĐANG MỞ").size(11.0).color(ui.visuals().weak_text_color()));
+                            ui.add_space(3.0);
+                            for (i, d) in self.docs.iter().enumerate() {
+                                let sel = i == self.active;
+                                let name = d.path.as_ref()
+                                    .and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned()))
+                                    .unwrap_or_else(|| "Tài liệu mới".into());
+                                let full = d.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+                                let mut txt = RichText::new(name).size(13.0);
+                                if sel {
+                                    txt = txt.strong().color(accent(self.dark));
+                                }
+                                if ui.selectable_label(sel, txt).on_hover_text(full).clicked() {
+                                    pick_tab = Some(i);
+                                }
+                            }
+                            if let Some(dir) = &active_dir {
+                                let mut sibs: Vec<PathBuf> = Vec::new();
+                                if let Ok(rd) = std::fs::read_dir(dir) {
+                                    for e in rd.flatten() {
+                                        let p = e.path();
+                                        if p.is_file() && is_md_path(&p) {
+                                            sibs.push(p);
+                                        }
                                     }
-                                    if r.clicked() {
-                                        goto = Some(e.char_offset);
+                                }
+                                sibs.sort();
+                                if !sibs.is_empty() {
+                                    ui.add_space(10.0);
+                                    let dname = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "THƯ MỤC".into());
+                                    ui.label(RichText::new(format!("THƯ MỤC · {dname}")).size(11.0).color(ui.visuals().weak_text_color()));
+                                    ui.add_space(3.0);
+                                    for p in sibs {
+                                        let is_cur = active_path.as_ref().map_or(false, |ap| same_path(ap, &p));
+                                        let fname = p.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                                        let mut txt = RichText::new(fname).size(12.5);
+                                        if is_cur {
+                                            txt = txt.strong().color(accent(self.dark));
+                                        }
+                                        if ui.selectable_label(is_cur, txt).on_hover_text(p.display().to_string()).clicked() {
+                                            open_disk = Some(p);
+                                        }
                                     }
-                                });
+                                }
                             }
                         });
-                    }
-                    if let Some(off) = goto {
-                        if let Some(doc) = self.docs.get(self.active) {
-                            let (doc_id, text) = (doc.id, doc.text.clone());
-                            self.goto_char(ctx, doc_id, off, off, &text);
-                            self.toc_goto = Some((doc_id, off));
-                            ctx.data_mut(|d| d.insert_temp(egui::Id::new("preview-scroll-target"), off));
-                            ctx.request_repaint();
+                        if let Some(i) = pick_tab {
+                            self.active = i;
+                        }
+                        if let Some(p) = open_disk {
+                            self.open_path(&p);
                         }
                     }
                 });
@@ -2653,7 +2809,7 @@ impl eframe::App for App {
                 let row_h = probe.size().y.max(1.0);
                 let digits = line_count.to_string().len().max(2);
                 let gw = probe.size().x * digits as f32 + 16.0;
-                let mut scroll = egui::ScrollArea::both()
+                let mut scroll = egui::ScrollArea::new([!app.word_wrap, true])
                     .id_salt(("editor-scroll", active_id))
                     .max_height(view_h)
                     .auto_shrink([false, false]);
@@ -2858,11 +3014,13 @@ impl eframe::App for App {
                                     .fill(content_fill(self.dark))
                                     .stroke(egui::Stroke::new(1.0, border_color(self.dark)))
                                     .rounding(egui::Rounding::same(12.0))
-                                    .inner_margin(egui::Margin::symmetric(28.0, 24.0))
+                                    .inner_margin(egui::Margin::symmetric(32.0, 26.0))
                                     .show(ui, |ui| {
-                                        ui.set_width((w - 56.0).max(140.0));
-                                        let mut seed = 1u64;
-                                        render_blocks(ui, &ast, &doc_dir, &mut preview_actions, &mut seed, &mut self.img_cache, self.zoom, false);
+                                        ui.vertical(|ui| {
+                                            ui.set_width((w - 64.0).max(160.0));
+                                            let mut seed = 1u64;
+                                            render_blocks(ui, &ast, &doc_dir, &mut preview_actions, &mut seed, &mut self.img_cache, self.zoom, false);
+                                        });
                                     });
                             });
                             ui.add_space(28.0);
