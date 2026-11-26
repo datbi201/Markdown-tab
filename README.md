@@ -1,87 +1,75 @@
 # Markdown Tabs
 
-Trình xem và soạn thảo Markdown nhiều tab, viết bằng Rust (native, không Electron) cho Windows. Giao diện tiếng Việt.
+Trình xem và soạn thảo Markdown nhiều tab **native trên Windows**, viết bằng Rust (`eframe`/`egui`). Ứng dụng được tối ưu cho tài liệu kỹ thuật: hiển thị công thức toán LaTeX hoàn toàn offline, sửa lỗi font tiếng Việt cũ (TCVN3, VNI, Symbol/MathType) và xuất Word (`.docx`) chuẩn phương trình OMML.
 
-**Tiếng Việt** | [English](#english)
+> **Phiên bản hiện tại:** `v0.7.3` · **Nền tảng:** Windows 64-bit (`x86_64-pc-windows-msvc`) · **Bản quyền:** MIT
 
-![Xem trước với công thức, mục lục và các tab](docs/Anh-chup-v0.5-Ribbon-Sang.png)
+## Tính năng nổi bật
 
-## Chức năng chính
+- **Giao diện 2 tầng hiện đại (Sáng & Tối):** Thanh đỉnh hợp nhất Tab tài liệu, chuyển nhanh 3 chế độ xem (**Soạn thảo** / **Xem trước** / **Chia đôi**), đổi **4 màu chủ đạo** (Xanh dương, Lục ngọc, Cam san hô, Tím), nút Sáng/Tối và chế độ **Tập trung (Zen)**.
+- **Mặc định Xem trước dạng trang giấy:** Nội dung căn giữa trên nền 4 tầng dịu mắt, hỗ trợ **chú thích ảnh**, **bảng căn lề**, **khối mã có nút Sao chép** và **hệ công thức LaTeX** (phân số, căn, tích phân, ma trận, `cases`, `aligned`…) render trực tiếp không cần Internet.
+- **Xuất tài liệu đa định dạng (1 bấm):** Cụm 5 nút **Word (`.docx`)**, **PDF**, **Markdown (`.md`)**, **HTML** độc lập (nhúng sẵn ảnh & MathML) và **In (`Ctrl+P`)** đặt ngay trên thanh công cụ. File `.docx` xuất ra đạt chuẩn OOXML, phương trình chuyển thành **Word Equation (OMML)** chỉnh sửa trực tiếp được trong Microsoft Word.
+- **Sửa lỗi trình bày & font tiếng Việt cũ (`Ctrl+Shift+F`):** Tự động khôi phục chữ UTF-8 vỡ mã, chuyển **TCVN3 (`.VnTime`)** và **VNI** sang Unicode chuẩn, đổi ký tự **Symbol/MathType** (`U+F0xx`) về ký hiệu toán học chuẩn, chuẩn hóa dấu công thức `$...$` / `$$...$$`, bảng và danh sách dán từ Word/PDF.
+- **Soạn thảo & Điều hướng thông minh:**
+  - **Thanh bên 2 tab:** Chuyển nhanh giữa **Mục lục** (có ô lọc tiêu đề) và **Thư mục** (liệt kê tệp đang mở & toàn bộ tệp `.md` cùng thư mục), kéo chỉnh độ rộng linh hoạt.
+  - **Cuộn đồng bộ 2 chiều** giữa Soạn thảo và Xem trước ở chế độ Chia đôi, kèm nút bật/tắt **Soft Wrap** (tự xuống dòng mềm) và cụm **Zoom (`−` / `100%` / `+` + `Ctrl+Cuộn chuột`)** ngay trên thanh trạng thái.
+  - **Bảng lệnh nhanh (`Ctrl+Shift+P`)** hỗ trợ gõ tiếng Việt không dấu, cùng thanh **Tìm & Thay thế** có bộ đếm kết quả (`x/y`).
 
-- **Nhiều tab, ba chế độ xem:** Soạn thảo, Xem trước, Chia đôi (Ctrl+1, 2, 3). Mở file là vào thẳng Xem trước. Mục lục bên trái, danh sách file gần đây, mở lại tab đã đóng, tự động lưu.
-- **Công thức hiển thị thật, không cần mạng:** phân số, căn, chỉ số trên và dưới, tổng, tích phân, giới hạn, ma trận, hệ phương trình, chữ Hy Lạp, vectơ.
-- **Sửa lỗi trình bày, font chữ và công thức** (Công cụ, Ctrl+Shift+F): hộp thoại liệt kê thay đổi dự kiến trước khi áp dụng, có hoàn tác.
-- **Xuất file:** Word (.docx, công thức thành phương trình Word sửa được), HTML, PDF qua hộp thoại In, văn bản thuần; sao chép HTML hoặc Markdown.
-- **Giao diện:** Ribbon theo tab, chế độ Sáng và Tối, bốn màu chủ đạo.
+## Ảnh chụp giao diện (`v0.7.3`)
 
-![Hộp thoại sửa lỗi trình bày, font chữ và công thức](docs/Anh-chup-v0.5-Sua-loi.png)
+*Tham chiếu bản thiết kế tương tác tại [docs/demo-v0.7.0.html](https://www.google.com/search?q=docs/demo-v0.7.0.html).*
 
-### Sửa lỗi font và công thức
+| Chế độ Xem trước dạng trang giấy | Chế độ Chia đôi & Mẫu công thức | Xuất PDF / In trực tiếp (`Ctrl+P`) |
+|---|---|---|
+|  |  |  |
 
-- Chữ vỡ mã (UTF-8 bị đọc nhầm thành Windows-1252), ví dụ `Viá»‡t` thành `Việt`.
-- Font tiếng Việt cũ **TCVN3 (.VnTime)** và **VNI** sang Unicode.
-- Ký tự font Symbol và MathType khi dán từ Word (ô vuông, ký tự lạ) sang chữ Hy Lạp và ký hiệu toán.
-- Chuẩn hóa dấu tổ hợp, bỏ ký tự vô hình, khoảng trắng và xuống dòng; thêm dòng phân cách bảng còn thiếu; ký hiệu danh sách và tiêu đề thiếu dấu cách.
-- Công thức: `\( ... \)` và `\[ ... \]` sang `$ ... $` và `$$ ... $$`; thoát `\$` cho dấu tiền tệ; kiểm tra công thức sai kèm số dòng.
+## Cài đặt & Sử dụng nhanh
 
-![Ribbon Công cụ ở chế độ tối, chia đôi soạn thảo và xem trước](docs/Anh-chup-v0.5-Cong-cu-Toi.png)
+### Cách 1: Dùng bản dựng sẵn (khuyên dùng)
+1. Tải gói phát hành `MarkdownTabs-Rust_v0.7.3.zip` (hoặc chạy trực tiếp `MarkdownTabs.exe` trong thư mục `02_LOCAL_RUNTIME`).
+2. Giải nén và nhấp đúp **`Cai-dat-MarkdownTabs-Rust_v0.5.bat`** (không cần quyền Administrator, không cần cài Python hay Rust) để gắn liên kết mở mặc định file `.md`.
+3. Mở tệp mẫu [mau-thu/Test-Xuat-file\_v0.6.md](https://www.google.com/search?q=mau-thu/Test-Xuat-file_v0.6.md) để kiểm thử hiển thị hình ảnh, bảng, công thức và xuất `.docx` / `.html` / `.pdf`.
 
-## Biên dịch trên Windows
+### Cách 2: Tự biên dịch từ mã nguồn
+Yêu cầu: **Rust** (toolchain `stable-msvc`) và **Visual Studio Build Tools** trên Windows.
 
-Cần Windows 64-bit. Chạy `Bien-dich-Windows.bat`: nếu máy chưa có Rust thì tải trình cài rustup, rồi biên dịch bằng `cargo build --release` và chép `MarkdownTabs.exe` ra thư mục gốc. Mã nguồn nằm trong `src-rust/`. Workflow GitHub Actions `build-windows` cũng biên dịch bản Windows cho mỗi lần đẩy mã.
+```powershell
+cd src-rust
+cargo test --release
+cargo build --release
+```
 
-Cài đặt và gỡ cài đặt cho người dùng hiện tại (không cần quyền quản trị): `Cai-dat-MarkdownTabs-Rust_v0.5.bat` và `Go-cai-dat-MarkdownTabs-Rust_v0.5.bat`.
+*(Nếu ổ `C:` gần đầy, đặt biến môi trường `$env:CARGO_TARGET_DIR = "D:\mdtabs-target"` trước khi chạy `cargo`.)*
 
-## Tài liệu
+Tệp thực thi sau khi biên dịch nằm tại `target\release\MarkdownTabs.exe`. Nếu chỉnh sửa bộ biểu tượng trong `tools\gen_icons.py`, chạy lại:
 
-- [Hướng dẫn nhanh](docs/README_HUONG_DAN-RUST_v0.5.md)
-- [Ghi chú bản v0.5.0](docs/GHI-CHU-v0.5.0.md): Ribbon, sửa lỗi font và công thức, xuất DOCX, file gần đây.
-- [Ghi chú bản v0.6.0](docs/GHI-CHU-v0.6.0.md): giao diện mới, xuất ảnh, bảng và công thức, các giới hạn đã biết.
-- [Lịch sử các bản](LICHSU-REV.md)
-- Tệp thử trong `mau-thu/`: công thức và xuất file, văn bản lỗi, văn bản dùng font cũ TCVN3 và VNI.
+```powershell
+python tools/gen_icons.py
+```
 
-## Giới hạn đã biết
+## Bảng phím tắt
 
-Giao diện v0.6 mới được thử trên một máy Windows 11; chưa thử ở tỷ lệ hiển thị 125% và 150%. Xuất PDF đi qua hộp thoại In của trình duyệt (chọn "Lưu thành PDF"). Chi tiết xem ghi chú v0.6.0.
+| Phím tắt | Chức năng |
+|---|---|
+| `Ctrl+N` / `Ctrl+O` | Tạo tài liệu mới / Mở file (chọn được nhiều file) |
+| `Ctrl+S` / `Ctrl+Shift+S` | Lưu / Lưu thành… |
+| `Ctrl+W` / `Ctrl+Shift+T` | Đóng tab hiện tại / Mở lại tab vừa đóng |
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | Chuyển chế độ: Soạn thảo / Xem trước / Chia đôi |
+| `Ctrl+Shift+P` | Mở Bảng lệnh nhanh (hỗ trợ gõ không dấu) |
+| `Ctrl+F` / `Ctrl+H` | Tìm kiếm / Thay thế (`Enter`: kết quả tiếp, `Esc`: đóng) |
+| `Ctrl+Shift+F` | Mở hộp thoại Sửa lỗi trình bày, font chữ & công thức |
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | Định dạng **Đậm** / *Nghiêng* / Chèn liên kết |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Phóng to / Thu nhỏ / Đặt lại 100% (hỗ trợ `Ctrl + Cuộn chuột`) |
+| `Ctrl+P` / `F11` / `F1` | In hoặc Lưu PDF / Toàn màn hình / Bảng phím tắt |
 
-## Giấy phép
+## Cấu trúc kho mã nguồn
 
-[MIT](LICENSE).
-
----
-
-## English
-
-**Markdown Tabs** is a multi-tab Markdown viewer and editor written in Rust (native, no Electron) for Windows. The interface is in Vietnamese.
-
-### Features
-
-- **Multiple tabs and three view modes:** Edit, Preview and Split (Ctrl+1, 2, 3). Opening a file goes straight to Preview. Table of contents on the left, recent files, reopen closed tabs, auto-save.
-- **Math rendered offline:** fractions, roots, sub and superscripts, sums, integrals, limits, matrices, cases, Greek letters, vectors.
-- **Fix layout, fonts and formulas** (Tools menu, Ctrl+Shift+F): a dialog lists the planned changes before applying them, with undo.
-- **Export:** Word (.docx, with formulas converted to editable Word equations), HTML, PDF through the print dialog, plain text; copy as HTML or Markdown.
-- **Interface:** tabbed ribbon, light and dark modes, four accent colors.
-
-### Font and formula fixes
-
-- Mojibake (UTF-8 read as Windows-1252), for example `Viá»‡t` to `Việt`.
-- Legacy Vietnamese fonts **TCVN3 (.VnTime)** and **VNI** to Unicode.
-- Symbol and MathType font characters pasted from Word (boxes, odd characters) to Greek letters and math symbols.
-- Normalizes combining marks, removes invisible characters, fixes whitespace and line endings, adds missing table separator rows, list bullets and headings without a space after `#`.
-- Formulas: `\( ... \)` and `\[ ... \]` to `$ ... $` and `$$ ... $$`; escapes `\$` for currency; checks formulas and reports errors with line numbers.
-
-### Build on Windows
-
-Requires 64-bit Windows. Run `Bien-dich-Windows.bat`: it downloads the rustup installer if Rust is missing, builds with `cargo build --release` and copies `MarkdownTabs.exe` to the repository root. Source code is in `src-rust/`. A GitHub Actions workflow (`build-windows`) also builds the Windows binary on every push. For a per-user install without administrator rights, use `Cai-dat-MarkdownTabs-Rust_v0.5.bat` (uninstall: `Go-cai-dat-MarkdownTabs-Rust_v0.5.bat`).
-
-### Documentation (Vietnamese)
-
-[Quick guide](docs/README_HUONG_DAN-RUST_v0.5.md), [v0.5.0 notes](docs/GHI-CHU-v0.5.0.md), [v0.6.0 notes](docs/GHI-CHU-v0.6.0.md), [version history](LICHSU-REV.md). Sample files for testing are in `mau-thu/`.
-
-### Known limitations
-
-The v0.6 interface was only tested on one Windows 11 machine, not yet at 125% and 150% display scaling. PDF export goes through the browser print dialog (choose "Save as PDF").
-
-### License
-
-[MIT](LICENSE).
+```text
+01_REPO_GITHUB/
+├── src-rust/              # Mã nguồn Rust (main.rs, features.rs, math.rs, docx.rs, fixer.rs, icons.rs...)
+├── tools/gen_icons.py     # Công cụ sinh bộ biểu tượng SVG vector -> src-rust/src/icons_data.rs
+├── docs/                  # Ghi chú phát hành (GHI-CHU-v0.7.3.md), bản demo & ảnh chụp v0.7.3
+├── mau-thu/               # Các tệp Markdown mẫu kiểm thử công thức, bảng, ảnh & font cũ
+├── BAN-GIAO.md            # Hiện trạng phát triển & ghi chú môi trường build
+└── LICHSU-REV.md          # Lịch sử các phiên bản từ v0.1 đến v0.7.3
+```
