@@ -1693,6 +1693,10 @@ impl App {
                     ("theme", "Chuyển giao diện Sáng / Tối", "sang toi dark light theme"),
                     ("zen", "Bật / Tắt chế độ Tập trung (Zen)", "zen tap trung toan man hinh"),
                     ("wrap", "Bật / Tắt xuống dòng mềm (Soft Wrap)", "wrap xuong dong mem"),
+                    ("sync", "Bật / Tắt cuộn đồng bộ 2 chiều", "cuon dong bo sync scroll"),
+                    ("zin", "Phóng to nội dung (Ctrl++)", "phong to zoom in"),
+                    ("zout", "Thu nhỏ nội dung (Ctrl+-)", "thu nho zoom out"),
+                    ("z100", "Đặt lại thu phóng 100% (Ctrl+0)", "zoom 100 mac dinh"),
                     ("preview", "Chế độ xem: Xem trước (Ctrl+2)", "xem truoc preview"),
                     ("split", "Chế độ xem: Chia đôi (Ctrl+3)", "chia doi split"),
                     ("edit", "Chế độ xem: Soạn thảo (Ctrl+1)", "soan thao edit"),
@@ -1729,6 +1733,13 @@ impl App {
                     self.word_wrap = !self.word_wrap;
                     self.persist_session();
                 }
+                "sync" => {
+                    self.sync_scroll = !self.sync_scroll;
+                    self.persist_session();
+                }
+                "zin" => { let z = self.zoom + 0.1; self.set_zoom(ctx, z); }
+                "zout" => { let z = self.zoom - 0.1; self.set_zoom(ctx, z); }
+                "z100" => self.set_zoom(ctx, 1.0),
                 "preview" => self.view = ViewMode::Preview,
                 "split" => self.view = ViewMode::Split,
                 "edit" => self.view = ViewMode::Edit,

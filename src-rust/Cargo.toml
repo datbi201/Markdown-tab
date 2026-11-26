@@ -1,6 +1,6 @@
 [package]
 name = "markdown-tabs"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 description = "Markdown Tabs - trinh xem & soan thao Markdown da tab (ban Rust native)"
 license = "MIT"

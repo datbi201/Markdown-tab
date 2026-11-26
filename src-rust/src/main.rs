@@ -35,7 +35,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 // ------------------------------------------------------------------ consts
 const APP_TITLE: &str = "Markdown Tabs";
-const VERSION: &str = "0.7.2-rust";
+const VERSION: &str = "0.7.3-rust";
 const IPC_PORT: u16 = 47655;
 const IPC_MAGIC: &str = "MDTABS/1";
 const MD_EXTS: &[&str] = &["md", "markdown", "mdown", "mkd", "txt"];
@@ -1232,6 +1232,8 @@ struct Session {
     accent: u8,
     #[serde(default = "default_true")]
     word_wrap: bool,
+    #[serde(default = "default_true")]
+    sync_scroll: bool,
 }
 
 fn default_zoom() -> f32 {
@@ -1250,7 +1252,7 @@ fn load_session() -> Session {
     std::fs::read_to_string(session_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false, accent: 0, word_wrap: true })
+        .unwrap_or(Session { files: vec![], dark: false, restore: true, zoom: 1.0, recent: vec![], autosave: false, accent: 0, word_wrap: true, sync_scroll: true })
 }
 
 fn save_session(s: &Session) {
@@ -1317,6 +1319,14 @@ struct App {
     cmd_query: String,
     toc_filter: String,
     sidebar_tab: u8,
+    // ---- v0.7.3: cuon dong bo 2 chieu ----
+    sync_scroll: bool,
+    ed_last_y: f32,
+    pv_last_y: f32,
+    ed_max_y: f32,
+    pv_max_y: f32,
+    pending_ed_ratio: Option<f32>,
+    pending_pv_ratio: Option<f32>,
 }
 
 impl App {
@@ -1365,7 +1375,16 @@ impl App {
             cmd_query: String::new(),
             toc_filter: String::new(),
             sidebar_tab: 0,
+            sync_scroll: session.sync_scroll,
+            ed_last_y: 0.0,
+            pv_last_y: 0.0,
+            ed_max_y: 1.0,
+            pv_max_y: 1.0,
+            pending_ed_ratio: None,
+            pending_pv_ratio: None,
         };
+        // Tat zoom mac dinh toan cua so cua egui de Ctrl++/Ctrl+-/Ctrl+Wheel chi zoom noi dung
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         // (che do kiem thu giao dien) MDT_DARK=1|0, MDT_ACCENT=0..3 ghi de phien da luu
         let dark_now = match std::env::var("MDT_DARK").as_deref() {
             Ok("1") => true,
@@ -1523,12 +1542,13 @@ impl App {
         self.find_goto = Some((id, a, b));
     }
 
-    fn set_zoom(&mut self, _ctx: &egui::Context, z: f32) {
-        // Zoom noi dung: chi editor + preview doi co chu; thanh cong cu, tab,
-        // muc luc, thanh trang thai giu nguyen kich thuoc.
-        let z = ((z.clamp(0.6, 2.0)) * 10.0).round() / 10.0;
-        self.zoom = z;
-        self.persist_session();
+    fn set_zoom(&mut self, ctx: &egui::Context, z: f32) {
+        let z = ((z * 10.0).round() / 10.0).clamp(0.6, 2.5);
+        if (self.zoom - z).abs() > 0.001 {
+            self.zoom = z;
+            self.persist_session();
+            ctx.request_repaint();
+        }
     }
 
     fn replace_all(&mut self) {
@@ -1579,7 +1599,7 @@ impl App {
             .iter()
             .filter_map(|d| d.path.as_ref().map(|p| p.to_string_lossy().into_owned()))
             .collect();
-        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave, accent: accent_index() as u8, word_wrap: self.word_wrap });
+        save_session(&Session { files, dark: self.dark, restore: true, zoom: self.zoom, recent: self.recent.clone(), autosave: self.autosave, accent: accent_index() as u8, word_wrap: self.word_wrap, sync_scroll: self.sync_scroll });
     }
 }
 
@@ -2477,6 +2497,19 @@ impl eframe::App for App {
         if k_z100 {
             self.set_zoom(ctx, 1.0);
         }
+        // Ctrl + con lan chuot de phong to / thu nho noi dung
+        let wheel_zoom = ctx.input(|i| {
+            if i.modifiers.ctrl {
+                let dy = i.raw_scroll_delta.y;
+                if dy > 1.0 { 0.1 } else if dy < -1.0 { -0.1 } else { 0.0 }
+            } else {
+                0.0
+            }
+        });
+        if wheel_zoom != 0.0 {
+            let z = self.zoom + wheel_zoom;
+            self.set_zoom(ctx, z);
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.ctrl && i.modifiers.shift) {
             self.cmd_open = !self.cmd_open;
             self.cmd_query.clear();
@@ -2498,7 +2531,8 @@ impl eframe::App for App {
         // ---- thanh trang thai 3 vung (v0.7: luon hien Da luu / Chua luu, khong lap duong dan) ----
         if !self.zen_mode {
             let mut toggle_wrap = false;
-            let mut reset_zoom = false;
+            let mut toggle_sync = false;
+            let mut zoom_delta: i8 = 0;
             egui::TopBottomPanel::bottom("statusbar")
                 .frame(
                     egui::Frame::default()
@@ -2537,11 +2571,32 @@ impl eframe::App for App {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.label(RichText::new(format!("{enc} | Dòng {line}, Cột {col_n} | {words} từ · {chars} ký tự")).size(12.0).color(ui.visuals().weak_text_color()));
                                 vsep(ui);
+                                if ui.add(egui::Button::new(RichText::new("+").size(13.0)).frame(false).min_size(egui::vec2(18.0, 18.0)))
+                                    .on_hover_text("Phóng to (Ctrl++ hoặc Ctrl+Cuộn)")
+                                    .clicked()
+                                {
+                                    zoom_delta = 1;
+                                }
                                 if ui.add(egui::Button::new(RichText::new(format!("{:.0}%", self.zoom * 100.0)).size(12.0)).frame(false))
                                     .on_hover_text("Đặt lại thu phóng 100% (Ctrl+0)")
                                     .clicked()
                                 {
-                                    reset_zoom = true;
+                                    zoom_delta = 2;
+                                }
+                                if ui.add(egui::Button::new(RichText::new("−").size(13.0)).frame(false).min_size(egui::vec2(18.0, 18.0)))
+                                    .on_hover_text("Thu nhỏ (Ctrl+- hoặc Ctrl+Cuộn)")
+                                    .clicked()
+                                {
+                                    zoom_delta = -1;
+                                }
+                                vsep(ui);
+                                let s_lbl = if self.sync_scroll { "Cuộn đồng bộ" } else { "Cuộn độc lập" };
+                                let s_col = if self.sync_scroll { accent(self.dark) } else { ui.visuals().weak_text_color() };
+                                if ui.add(egui::Button::new(RichText::new(s_lbl).size(12.0).color(s_col)).frame(false))
+                                    .on_hover_text("Bật / tắt cuộn đồng bộ 2 chiều giữa Soạn thảo và Xem trước")
+                                    .clicked()
+                                {
+                                    toggle_sync = true;
                                 }
                                 vsep(ui);
                                 let w_lbl = if self.word_wrap { "Wrap: Bật" } else { "Wrap: Tắt" };
@@ -2562,8 +2617,15 @@ impl eframe::App for App {
                 self.word_wrap = !self.word_wrap;
                 self.persist_session();
             }
-            if reset_zoom {
-                self.set_zoom(ctx, 1.0);
+            if toggle_sync {
+                self.sync_scroll = !self.sync_scroll;
+                self.persist_session();
+            }
+            match zoom_delta {
+                1 => { let z = self.zoom + 0.1; self.set_zoom(ctx, z); }
+                -1 => { let z = self.zoom - 0.1; self.set_zoom(ctx, z); }
+                2 => self.set_zoom(ctx, 1.0),
+                _ => {}
             }
         }
 
@@ -2790,6 +2852,15 @@ impl eframe::App for App {
             }
             let ez = app.zoom;
             let mut menu_goto: Option<(usize, usize)> = None;
+            let ed_wrap = app.word_wrap;
+            let synced_from_pv_y = if let Some(y) = scroll_y {
+                Some(y)
+            } else if let Some(r) = app.pending_ed_ratio.take() {
+                Some((r * app.ed_max_y).max(0.0))
+            } else {
+                None
+            };
+            let mut ed_scroll_res: Option<(f32, f32)> = None;
             {
                 let Some(doc) = app.docs.get_mut(app.active) else { return };
                 let saved_sel = (doc.sel_start, doc.sel_end);
@@ -2809,11 +2880,11 @@ impl eframe::App for App {
                 let row_h = probe.size().y.max(1.0);
                 let digits = line_count.to_string().len().max(2);
                 let gw = probe.size().x * digits as f32 + 16.0;
-                let mut scroll = egui::ScrollArea::new([!app.word_wrap, true])
+                let mut scroll = egui::ScrollArea::new([!ed_wrap, true])
                     .id_salt(("editor-scroll", active_id))
                     .max_height(view_h)
                     .auto_shrink([false, false]);
-                if let Some(y) = scroll_y {
+                if let Some(y) = synced_from_pv_y {
                     scroll = scroll.scroll_offset(egui::Vec2::new(0.0, y));
                 }
                 let mut gutter: Option<(Arc<egui::Galley>, egui::Pos2)> = None;
@@ -2825,7 +2896,7 @@ impl eframe::App for App {
                     // cot so dong: dung yen ben trai, KHONG cuon ngang theo noi dung
                     let (gre, _) = ui.allocate_exact_size(egui::vec2(gw, view_h), egui::Sense::hover());
                     ui.painter().rect_filled(gre, egui::Rounding::same(6.0), ui.visuals().faint_bg_color);
-                    scroll.show(ui, |ui| {
+                    let scroll_out = scroll.show(ui, |ui| {
                         // ---- khung soan thao ----
                         let sec_click = ui.input(|i| i.pointer.secondary_clicked());
                         let mut layouter_fn = editor_layouter;
@@ -2925,6 +2996,10 @@ impl eframe::App for App {
                         }
                         gutter = Some((out.galley.clone(), out.galley_pos));
                     });
+                    ed_scroll_res = Some((
+                        scroll_out.state.offset.y,
+                        (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(1.0),
+                    ));
                     // ---- ve so dong theo dung vi tri tung dong cua khung soan thao ----
                     if let Some((galley, gpos)) = gutter.take() {
                         let painter = ui.painter_at(gre);
@@ -2956,6 +3031,14 @@ impl eframe::App for App {
                         }
                     }
                     });
+            }
+            if let Some((ed_y, ed_max)) = ed_scroll_res {
+                app.ed_max_y = ed_max;
+                if synced_from_pv_y.is_none() && app.sync_scroll && matches!(app.view, ViewMode::Split) && (ed_y - app.ed_last_y).abs() > 0.5 {
+                    app.pending_pv_ratio = Some((ed_y / ed_max).clamp(0.0, 1.0));
+                    ui.ctx().request_repaint();
+                }
+                app.ed_last_y = ed_y;
             }
             if let Some((a, b)) = menu_goto {
                 app.find_goto = Some((active_id, a, b));
@@ -3001,9 +3084,18 @@ impl eframe::App for App {
                         self.ui_start_page(ui);
                         return;
                     }
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
+                    let active_doc_id = self.docs.get(self.active).map(|d| d.id).unwrap_or(0);
+                    let mut pv_scroll = egui::ScrollArea::vertical()
+                        .id_salt(("preview-scroll", active_doc_id))
+                        .auto_shrink([false, false]);
+                    let synced_from_ed = if let Some(r) = self.pending_pv_ratio.take() {
+                        let target_y = (r * self.pv_max_y).max(0.0);
+                        pv_scroll = pv_scroll.scroll_offset(egui::Vec2::new(0.0, target_y));
+                        true
+                    } else {
+                        false
+                    };
+                    let pv_out = pv_scroll.show(ui, |ui| {
                             let avail = ui.available_width() - 4.0;
                             let w = (avail - 36.0).clamp(180.0, 840.0).min(avail.max(180.0));
                             let m = ((avail - w) / 2.0).max(8.0);
@@ -3025,6 +3117,14 @@ impl eframe::App for App {
                             });
                             ui.add_space(28.0);
                         });
+                    let pv_y = pv_out.state.offset.y;
+                    let pv_max = (pv_out.content_size.y - pv_out.inner_rect.height()).max(1.0);
+                    self.pv_max_y = pv_max;
+                    if !synced_from_ed && self.sync_scroll && matches!(self.view, ViewMode::Split) && (pv_y - self.pv_last_y).abs() > 0.5 {
+                        self.pending_ed_ratio = Some((pv_y / pv_max).clamp(0.0, 1.0));
+                        ctx.request_repaint();
+                    }
+                    self.pv_last_y = pv_y;
                 }
             }
         });
